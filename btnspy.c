@@ -1,12 +1,13 @@
 #include <linux/input.h>
 #include <fcntl.h>
-#include <unistd.h>
+#include <poll.h>
+#include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <poll.h>
 #include <string.h>
-#include <signal.h>
+#include <time.h>
+#include <unistd.h>
 
 /** Device Nodes
   * event0 : gpio-keys (Power, Vol, Home)
@@ -22,9 +23,9 @@
 
 // Menu Config
 #define MENU_SIZE 5
-int in_menu = 0;
+bool in_menu = false;
 int selection = 0;
-int adjusting_brightness = 0;
+bool adjusting_brightness = false;
 int current_brightness = 8; // Default
 volatile sig_atomic_t keep_running = 1;
 
@@ -167,7 +168,7 @@ int main() {
                                                 draw_menu(selection);
                                                 break;
                                             case 1: 
-                                                adjusting_brightness = 1; 
+                                                adjusting_brightness = true; 
                                                 draw_menu(selection);
                                                 break;
                                             case 2: 
@@ -204,17 +205,17 @@ int main() {
                     if (ev.code == 139) { // Menu Key
                         write(fb_fd, "0", 1);
                         in_menu = !in_menu;
-                        adjusting_brightness = 0;
+                        adjusting_brightness = false;
                         if (in_menu) draw_menu(selection);
                         else printf("\033[H\033[J");
                     }
                     if (ev.code == 158) { // Back Key
                         if (adjusting_brightness) {
-                            adjusting_brightness = 0;
+                            adjusting_brightness = false;
                             draw_menu(selection);
                         } else {
                             //system("pkill -TERM whiptail htop top ping");
-                            in_menu = 0;
+                            in_menu = false;
                             printf("\r\nInterrupted.\r\n");
                         }
                     }
