@@ -3,6 +3,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,9 +25,9 @@
 // Menu Config
 #define MENU_SIZE 5
 bool in_menu = false;
-int selection = 0;
+uint8_t selection = 0;
 bool adjusting_brightness = false;
-int current_brightness = 8; // Default
+uint8_t current_brightness = 8; // Default
 volatile sig_atomic_t keep_running = 1;
 
 const char *options[] = {
@@ -178,7 +179,7 @@ int main() {
                                                 system("sudo rc-service sshd restart"); 
                                                 break;
                                             case 4: 
-                                                in_menu = 0; 
+                                                in_menu = false; 
                                                 printf("\033[H\033[J"); 
                                                 break;
                                         }
@@ -229,7 +230,7 @@ int main() {
     }
 
 cleanup:
-    printf("\nReleasing devices and exiting...\n");
+    printf("\r\nReleasing devices and exiting...\r\n");
     if (fds[0].fd >= 0) { ioctl(fds[0].fd, EVIOCGRAB, 0); close(fds[0].fd); }
     if (fds[1].fd >= 0) { ioctl(fds[1].fd, EVIOCGRAB, 0); close(fds[1].fd); }
     if (fds[2].fd >= 0) { ioctl(fds[2].fd, EVIOCGRAB, 0); close(fds[2].fd); }
