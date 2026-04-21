@@ -1,0 +1,16 @@
+#!/bin/sh
+(
+  # Wait 10 seconds for other services to settle
+  sleep 10
+
+  # Force terminal to recognize the 'linux' type to
+  #   allow blanking after 1 minute of inactivity
+  # Redirecting to tty1 targets the physical screen
+  TERM=linux setterm --blank 1 > /dev/tty1
+
+  # Set screen brigthness to minimal
+  echo 0 > /sys/class/backlight/spi3.0/brightness
+
+  # Turn off bluetooth
+  bt off
+) &
