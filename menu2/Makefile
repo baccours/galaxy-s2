@@ -1,6 +1,6 @@
 CC      = gcc
 CFLAGS  = -O2 -Wall -Wextra -std=c11
-TARGET  = main
+TARGET  = menu
 SRCS    = main.c menu.c system.c
 OBJS    = $(SRCS:.c=.o)
 
