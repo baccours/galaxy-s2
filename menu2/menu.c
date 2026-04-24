@@ -6,10 +6,10 @@
  * *_items[] array. No other file needs to change.
  *
  * Depends on: system.c (run_cmd, fb_set_blank, fbkbd_set, log_*)
- *             pmenu.c  (th_close_menu — exit-menu action)
+ *             main.c  (th_close_menu — exit-menu action)
  */
 
-#include "pmenu.h"
+#include "main.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -49,8 +49,8 @@ static const char *rfkill_status(const char *type)
 static const char *status_wifi(void)      { return rfkill_status("wlan");      }
 static const char *status_bt  (void)      { return rfkill_status("bluetooth"); }
 
-/* ── Forward declaration (body in pmenu.c, visible via pmenu.h) ───────────── */
-/* th_close_menu declared in pmenu.h */
+/* ── Forward declaration (body in main.c, visible via main.h) ───────────── */
+/* th_close_menu declared in main.h */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Leaf action callbacks
