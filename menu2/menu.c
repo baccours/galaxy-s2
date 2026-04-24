@@ -88,6 +88,9 @@ static void action_poweroff(void)
     run_cmd(a);
 }
 
+/* action_brightness — enters brightness overlay via FSM */
+static void action_brightness(void) { th_brightness_enter(); }
+
 /* Delegates to th_close_menu (FSM handler) so the state transition is
  * always driven through the FSM, not duplicated here. */
 static void action_exit_menu(void) { th_close_menu(); }
@@ -113,11 +116,12 @@ static MenuItem g_pwr_items[] = {
 Menu g_pwr_menu = { "Power", g_pwr_items, 2, NULL };
 
 static MenuItem g_root_items[] = {
-    { "Networking", NULL, &g_net_menu, NULL },
-    { "Power",      NULL, &g_pwr_menu, NULL },
-    { "Exit Menu",  action_exit_menu, NULL, NULL },
+    { "Networking",  NULL,              &g_net_menu, NULL },
+    { "Power",       NULL,              &g_pwr_menu, NULL },
+    { "Brightness",  action_brightness, NULL,        NULL },
+    { "Exit Menu",   action_exit_menu,  NULL,        NULL },
 };
-const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, 3, NULL };
+const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, 4, NULL };
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Rendering — single entry point
@@ -187,11 +191,58 @@ static void render_menu(void)
           T_RESET, stdout);
 }
 
+static void render_brightness(void)
+{
+    fputs(T_BOLD T_CYAN, stdout);
+
+    /* Box top */
+    fputs("+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
+
+    /* Title */
+    fputs("| " T_YELLOW, stdout);
+    int tlen = fprintf(stdout, "Brightness");
+    for (int i = tlen; i < BOX_W - 2; i++) fputc(' ', stdout);
+    fputs(T_CYAN " |\r\n", stdout);
+
+    /* Separator */
+    fputs("+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
+
+    /* Level fraction */
+    printf("| " T_RESET " %2d / %-2d " T_CYAN, g_brightness, BRIGHTNESS_MAX);
+
+    /* Bar: filled portion in bold white, empty in dim */
+    fputs(T_BOLD "[", stdout);
+    for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
+        if (i == g_brightness) fputs(T_DIM, stdout);
+        fputc(i < g_brightness ? '#' : '-', stdout);
+    }
+    fputs(T_RESET T_CYAN "]", stdout);
+
+    /* Pad remainder of the row */
+    /* bar occupies: 1 "[" + (BRIGHTNESS_MAX+1) chars + 1 "]" = 27 chars
+     * prefix "| " + " %2d / %-2d " = 11 chars  → total = 38; clip to box */
+    fputs(" |\r\n", stdout);
+
+    /* Box bottom */
+    fputs(T_CYAN "+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
+
+    fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, stdout);
+}
+
 /* Unified render — always clears, then delegates on g_state */
 void render(void)
 {
     fputs(T_CLEAR, stdout);
-    if (g_state == STATE_MENU)
-        render_menu();
+    switch (g_state) {
+        case STATE_MENU:       render_menu();       break;
+        case STATE_BRIGHTNESS: render_brightness(); break;
+        default:                                    break;
+    }
     fflush(stdout);
 }
