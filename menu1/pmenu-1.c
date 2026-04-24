@@ -572,12 +572,19 @@ static void sig_handler(int s) { (void)s; g_running = 0; }
 
 static void cleanup(void)
 {
-    /* Release grabs first so other processes can resume input */
+    /* 1. Restore terminal first — most critical for the user's session.
+     *    g_termios_saved guards against calling this before terminal_raw(). */
+    terminal_restore();
+    fputs(T_CLEAR T_RESET T_SHOW, stdout);
+    fflush(stdout);
+
+    /* 2. Release input grabs — device usable again immediately after. */
     grab(g_fd_gpio,     false);
     grab(g_fd_touchkey, false);
     grab(g_fd_touch,    false);
     grab(g_fd_fbkbd,    false);
 
+    /* 3. Close file descriptors. */
     if (g_fd_gpio     >= 0) close(g_fd_gpio);
     if (g_fd_touchkey >= 0) close(g_fd_touchkey);
     if (g_fd_touch    >= 0) close(g_fd_touch);
@@ -588,9 +595,6 @@ static void cleanup(void)
         close(g_fd_fb);
     }
 
-    fputs(T_CLEAR T_RESET T_SHOW, stdout);
-    fflush(stdout);
-    terminal_restore();
     log_info("done");
 }
 
@@ -636,6 +640,9 @@ int main(void)
     };
 
     g_menu = &g_root_menu;
+    /* terminal_raw() only after all devices confirmed open — avoids dirtying
+     * the terminal on a failed startup (cleanup() guards with g_termios_saved
+     * but it is cleaner never to touch it in the first place). */
     terminal_raw();
     fputs(T_CLEAR T_SHOW, stdout);
     fflush(stdout);
