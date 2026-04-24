@@ -61,12 +61,14 @@ typedef enum {
  * Menu types
  * ═══════════════════════════════════════════════════════════════════════════ */
 typedef struct Menu Menu;
-typedef void (*ActionFn)(void);
+typedef void        (*ActionFn)(void);
+typedef const char *(*StatusFn)(void);  /* returns "ON"/"OFF"/NULL at render time */
 
 typedef struct {
     const char *label;
-    ActionFn    action;   /* NULL for submenu items */
-    Menu       *submenu;  /* NULL for leaf items    */
+    ActionFn    action;   /* NULL for submenu items                */
+    Menu       *submenu;  /* NULL for leaf items                   */
+    StatusFn    status;   /* NULL = no badge; else called at draw  */
 } MenuItem;
 
 struct Menu {
