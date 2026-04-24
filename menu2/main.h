@@ -16,7 +16,11 @@
 #define DEV_TOUCHKEY    "/dev/input/event1"
 #define DEV_TOUCH       "/dev/input/event2"
 #define DEV_FBKBD       "/dev/input/event3"
-#define FB_BLANK_PATH   "/sys/class/graphics/fb0/blank"
+#define FB_BLANK_PATH      "/sys/class/graphics/fb0/blank"
+#define BRIGHTNESS_PATH    "/sys/class/backlight/spi3.0/brightness"
+#define BRIGHTNESS_MIN     0
+#define BRIGHTNESS_MAX     24
+#define BRIGHTNESS_DEFAULT 12
 
 /* ── Key codes ────────────────────────────────────────────────────────────── */
 #define KEY_VOLUMEUP_CODE   115
@@ -44,8 +48,9 @@
  * ═══════════════════════════════════════════════════════════════════════════ */
 typedef enum {
     STATE_IDLE,   /* Screen on, terminal visible, no menu  */
-    STATE_MENU,   /* Menu visible and navigable            */
-    STATE_ANY,    /* Wildcard — matches any state in table */
+    STATE_MENU,       /* Menu visible and navigable            */
+    STATE_BRIGHTNESS, /* Brightness adjustment overlay          */
+    STATE_ANY,        /* Wildcard — matches any state in table */
 } AppState;
 
 typedef enum {
@@ -87,6 +92,7 @@ extern bool        g_screen_blank;
 extern bool        g_fbkbd_on;
 extern const Menu *g_menu;
 extern uint8_t     g_sel;
+extern int         g_brightness;
 
 /* File descriptors (system.c owns open/close, all TUs may read) */
 extern int g_fd_gpio;
@@ -109,7 +115,9 @@ void log_err (const char *fmt, ...);
 void terminal_raw    (void);
 void terminal_restore(void);
 
-void fb_set_blank (bool blank);
+void fb_set_blank       (bool blank);
+int  brightness_read    (void);
+void brightness_write   (int level);
 int  run_cmd      (char *const argv[]);
 void grab         (int fd, bool on);
 void update_grabs (void);
@@ -124,5 +132,6 @@ void render(void);
 /* th_close_menu is also needed by menu.c's action_exit_menu;
  * declared here so menu.c can call it without knowing FSM internals. */
 void th_close_menu(void);
+void th_brightness_enter(void);  /* called by action_brightness in menu.c */
 
 #endif /* MAIN_H */
