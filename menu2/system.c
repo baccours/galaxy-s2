@@ -29,6 +29,8 @@ bool                  g_fbkbd_on     = false;
 const Menu           *g_menu         = NULL;
 uint8_t               g_sel          = 0;
 
+int  g_brightness = BRIGHTNESS_DEFAULT;
+
 int g_fd_gpio     = -1;
 int g_fd_touchkey = -1;
 int g_fd_touch    = -1;
@@ -133,6 +135,30 @@ void fbkbd_set(bool start)
     char *const a_stop[]  = { "rc-service", "fbkeyboard", "stop",  NULL };
     if (run_cmd(start ? a_start : a_stop) == 0)
         g_fbkbd_on = start;
+}
+
+/* ── Brightness ──────────────────────────────────────────────────────────── */
+
+int brightness_read(void)
+{
+    FILE *f = fopen(BRIGHTNESS_PATH, "r");
+    if (!f) { log_err("open " BRIGHTNESS_PATH); return g_brightness; }
+    int v = g_brightness;
+    if (fscanf(f, "%d", &v) != 1) log_err("read " BRIGHTNESS_PATH);
+    fclose(f);
+    return v;
+}
+
+void brightness_write(int level)
+{
+    if (level < BRIGHTNESS_MIN) level = BRIGHTNESS_MIN;
+    if (level > BRIGHTNESS_MAX) level = BRIGHTNESS_MAX;
+    g_brightness = level;
+    FILE *f = fopen(BRIGHTNESS_PATH, "w");
+    if (!f) { log_err("open " BRIGHTNESS_PATH); return; }
+    fprintf(f, "%d\n", level);
+    fclose(f);
+    log_info("brightness -> %d", level);
 }
 
 /* ── Device open helper ───────────────────────────────────────────────────── */
