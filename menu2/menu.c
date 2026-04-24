@@ -6,16 +6,51 @@
  * *_items[] array. No other file needs to change.
  *
  * Depends on: system.c (run_cmd, fb_set_blank, fbkbd_set, log_*)
- *             main.c  (th_close_menu — exit-menu action)
+ *             pmenu.c  (th_close_menu — exit-menu action)
  */
 
-#include "main.h"
+#include "pmenu.h"
 
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
-/* ── Forward declaration (body in main.c, visible via main.h) ───────────── */
-/* th_close_menu declared in main.h */
+/* ── rfkill status helpers ────────────────────────────────────────────────── */
+
+/*
+ * Returns "ON" if the given rfkill type is unblocked, "OFF" if blocked.
+ * Reads /sys/class/rfkill/rfkillN/type and soft_blocked to avoid forking
+ * at render time — render is called on every keypress so we keep it cheap.
+ * Falls back to "?" if sysfs is unreadable (e.g. module not loaded).
+ */
+static const char *rfkill_status(const char *type)
+{
+    char path[64], buf[32];
+    for (int i = 0; i < 16; i++) {
+        snprintf(path, sizeof(path), "/sys/class/rfkill/rfkill%d/type", i);
+        FILE *ft = fopen(path, "r");
+        if (!ft) break;
+        bool match = (fgets(buf, sizeof(buf), ft) != NULL &&
+                      strncmp(buf, type, strlen(type)) == 0);
+        fclose(ft);
+        if (!match) continue;
+
+        snprintf(path, sizeof(path),
+                 "/sys/class/rfkill/rfkill%d/soft_blocked", i);
+        FILE *fb = fopen(path, "r");
+        if (!fb) return "?";
+        bool blocked = (fgets(buf, sizeof(buf), fb) != NULL && buf[0] == '1');
+        fclose(fb);
+        return blocked ? "OFF" : "ON";
+    }
+    return "?";
+}
+
+static const char *status_wifi(void)      { return rfkill_status("wlan");      }
+static const char *status_bt  (void)      { return rfkill_status("bluetooth"); }
+
+/* ── Forward declaration (body in pmenu.c, visible via pmenu.h) ───────────── */
+/* th_close_menu declared in pmenu.h */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Leaf action callbacks
@@ -66,21 +101,21 @@ static void action_exit_menu(void) { th_close_menu(); }
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static MenuItem g_net_items[] = {
-    { "Toggle WiFi",      action_wifi_toggle, NULL },
-    { "Toggle Bluetooth", action_bt_toggle,   NULL },
+    { "Toggle WiFi",      action_wifi_toggle, NULL, status_wifi },
+    { "Toggle Bluetooth", action_bt_toggle,   NULL, status_bt   },
 };
 Menu g_net_menu = { "Networking", g_net_items, 2, NULL };
 
 static MenuItem g_pwr_items[] = {
-    { "Reboot",    action_reboot,   NULL },
-    { "Power Off", action_poweroff, NULL },
+    { "Reboot",    action_reboot,   NULL, NULL },
+    { "Power Off", action_poweroff, NULL, NULL },
 };
 Menu g_pwr_menu = { "Power", g_pwr_items, 2, NULL };
 
 static MenuItem g_root_items[] = {
-    { "Networking", NULL, &g_net_menu },
-    { "Power",      NULL, &g_pwr_menu },
-    { "Exit Menu",  action_exit_menu, NULL },
+    { "Networking", NULL, &g_net_menu, NULL },
+    { "Power",      NULL, &g_pwr_menu, NULL },
+    { "Exit Menu",  action_exit_menu, NULL, NULL },
 };
 const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, 3, NULL };
 
@@ -121,15 +156,26 @@ static void render_menu(void)
 
     /* Items */
     for (uint8_t i = 0; i < g_menu->count; i++) {
-        bool sel     = (i == g_sel);
-        bool has_sub = (g_menu->items[i].submenu != NULL);
-        const char *suffix = has_sub ? " >" : "  ";
+        bool        sel    = (i == g_sel);
+        bool        has_sub = (g_menu->items[i].submenu != NULL);
+        const char *badge  = g_menu->items[i].status
+                             ? g_menu->items[i].status() : NULL;
+        /*
+         * Layout: "| " + label + padding + badge/arrow + " |"
+         * badge replaces the submenu arrow when present.
+         * badge is right-aligned; label is left-aligned within the remainder.
+         */
+        const char *arrow  = has_sub ? ">" : " ";
+        char        badge_buf[8] = "  ";   /* two spaces when no badge */
+        if (badge)
+            snprintf(badge_buf, sizeof(badge_buf), "%-3s", badge);
+
         if (sel)
-            printf("| " T_REV T_BOLD "%-*s%s" T_RESET T_CYAN " |\r\n",
-                   BOX_W - 5, g_menu->items[i].label, suffix);
+            printf("| " T_REV T_BOLD "%-*s%s%s" T_RESET T_CYAN " |\r\n",
+                   BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
         else
-            printf("| " T_RESET "%-*s%s" T_CYAN " |\r\n",
-                   BOX_W - 5, g_menu->items[i].label, suffix);
+            printf("| " T_RESET "%-*s%s%s" T_CYAN " |\r\n",
+                   BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
     }
 
     /* Bottom border */
