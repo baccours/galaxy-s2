@@ -106,6 +106,32 @@ static void th_home(void)
     fbkbd_set(!g_fbkbd_on);
 }
 
+/* Brightness overlay handlers */
+void th_brightness_enter(void)
+{
+    g_brightness = brightness_read();  /* sync with real hw value */
+    g_state = STATE_BRIGHTNESS;
+    render();
+}
+
+static void th_brightness_up(void)
+{
+    brightness_write(g_brightness + 1);
+    render();
+}
+
+static void th_brightness_down(void)
+{
+    brightness_write(g_brightness - 1);
+    render();
+}
+
+static void th_brightness_exit(void)
+{
+    g_state = STATE_MENU;
+    render();
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * FSM — Declarative transition table
  *
@@ -129,6 +155,12 @@ static const Transition TRANSITIONS[] = {
     { STATE_MENU, EVT_POWER,     th_menu_select },
     { STATE_MENU, EVT_BACK_KEY,  th_menu_back   },
     { STATE_MENU, EVT_MENU_KEY,  th_close_menu  },
+
+    /* ── Brightness overlay ──────────────────────────────────────────── */
+    { STATE_BRIGHTNESS, EVT_VOL_UP,   th_brightness_up   },
+    { STATE_BRIGHTNESS, EVT_VOL_DOWN, th_brightness_down },
+    { STATE_BRIGHTNESS, EVT_POWER,    th_brightness_exit },
+    { STATE_BRIGHTNESS, EVT_BACK_KEY, th_brightness_exit },
 
     /* ── Idle-specific ────────────────────────────────────────────────── */
     { STATE_IDLE, EVT_POWER,     th_idle_power  },
