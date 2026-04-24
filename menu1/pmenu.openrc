@@ -1,0 +1,25 @@
+#!/sbin/openrc-run
+# OpenRC service for pmenu — hardware-button menu on GT-I9100
+
+name="pmenu"
+description="postmarketOS hardware-button menu"
+command="/usr/local/bin/pmenu"
+command_background=true
+pidfile="/run/pmenu.pid"
+output_log="/var/log/pmenu.log"
+error_log="/var/log/pmenu.log"
+
+# Run on tty1 so ANSI output goes to the framebuffer console
+# Requires the console to be on /dev/tty1 (default pmOS setup)
+command_args=""
+
+start_pre() {
+    # Make sure fbkeyboard is present but not necessarily running
+    # pmenu itself will start/stop it via rc-service
+    return 0
+}
+
+depend() {
+    need localmount
+    after fbkeyboard
+}
