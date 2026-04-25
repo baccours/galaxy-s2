@@ -1,11 +1,8 @@
 /*
  * system.c — low-level system helpers
  *
- * Owns: terminal raw/restore, fb_blank sysfs fd, run_cmd (fork+execvp),
- *       EVIOCGRAB wrappers, fbkeyboard OpenRC service, logging.
- *
+ * Owns: terminal, fb_blank, run_cmd, grab, fbkeyboard, brightness, logging.
  * Nothing here knows about menus or the FSM.
- * Binary: menu
  */
 
 #include "main.h"
@@ -22,7 +19,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-/* ── Global state definitions (declared extern in main.h) ───────────────── */
+/* ── Global state definitions ────────────────────────────────────────────── */
 volatile sig_atomic_t g_running      = 1;
 AppState              g_state        = STATE_IDLE;
 bool                  g_screen_blank = false;
@@ -31,23 +28,15 @@ const Menu           *g_menu         = NULL;
 uint8_t               g_sel          = 0;
 int                   g_brightness   = BRIGHTNESS_DEFAULT;
 
-int g_fd_gpio     = -1;
-int g_fd_touchkey = -1;
-int g_fd_touch    = -1;
-int g_fd_fb       = -1;
-
-/* ── Console output ───────────────────────────────────────────────────────
- *
- * g_tty is the one FILE* used for ALL output: ANSI sequences, menu
- * rendering, and termios control. It is always /dev/tty1 — the phone's
- * framebuffer console — regardless of how the process was started
- * (local shell, SSH, OpenRC service). stdout is never used for display.
- */
-FILE *g_tty = NULL;
+int   g_fd_gpio     = -1;
+int   g_fd_touchkey = -1;
+int   g_fd_touch    = -1;
+int   g_fd_fb       = -1;
+FILE *g_tty         = NULL;
 
 /* ── Logging ──────────────────────────────────────────────────────────────
- * Logs go to stderr so they don't interfere with menu rendering on g_tty.
- * When redirecting for debug: sudo ./menu 2>log.txt
+ * Goes to stderr, separate from menu rendering on g_tty.
+ * Redirect with: sudo ./menu 2>log.txt
  */
 void log_info(const char *fmt, ...)
 {
@@ -70,10 +59,9 @@ void log_err(const char *fmt, ...)
 }
 
 /* ── Terminal ─────────────────────────────────────────────────────────────
- *
- * Open /dev/tty1 once at startup. Keep the fd open for the process
- * lifetime — terminal_raw() and terminal_restore() only toggle termios
- * flags on it. This works identically whether run locally or over SSH.
+ * DEV_TTY is opened once and kept for the process lifetime.
+ * terminal_raw/restore only toggle termios flags — no reopen.
+ * Works identically whether launched locally, over SSH, or as a service.
  */
 static struct termios g_orig_termios;
 static bool           g_termios_saved = false;
@@ -81,18 +69,18 @@ static int            g_tty_fd        = -1;
 
 bool terminal_open(void)
 {
-    g_tty_fd = open("/dev/tty1", O_RDWR | O_CLOEXEC);
-    if (g_tty_fd < 0) { log_err("open /dev/tty1"); return false; }
+    g_tty_fd = open(DEV_TTY, O_RDWR | O_CLOEXEC);
+    if (g_tty_fd < 0) { log_err("open " DEV_TTY); return false; }
 
     if (tcgetattr(g_tty_fd, &g_orig_termios) != 0) {
-        log_err("tcgetattr /dev/tty1");
+        log_err("tcgetattr " DEV_TTY);
         close(g_tty_fd); g_tty_fd = -1;
         return false;
     }
 
     g_tty = fdopen(g_tty_fd, "w");
     if (!g_tty) {
-        log_err("fdopen /dev/tty1");
+        log_err("fdopen " DEV_TTY);
         close(g_tty_fd); g_tty_fd = -1;
         return false;
     }
@@ -136,24 +124,23 @@ void fb_set_blank(bool blank)
     if (write(g_fd_fb, &c, 1) < 0) log_err("fb_blank write");
     else g_screen_blank = blank;
     lseek(g_fd_fb, 0, SEEK_SET);
-    log_info("screen %s", blank ? "blanked" : "unblanked");
 }
 
-/* ── Process execution ────────────────────────────────────────────────────── */
+/* ── Process execution — fork+execvp, no shell ───────────────────────────── */
 int run_cmd(char *const argv[])
 {
-    log_info("exec: %s", argv[0]);
     pid_t pid = fork();
     if (pid < 0) { log_err("fork"); return -1; }
     if (pid == 0) { execvp(argv[0], argv); _exit(127); }
     int st;
     if (waitpid(pid, &st, 0) < 0) { log_err("waitpid"); return -1; }
-    int rc = WIFEXITED(st) ? WEXITSTATUS(st) : -1;
-    if (rc != 0) log_info("%s returned %d", argv[0], rc);
-    return rc;
+    return WIFEXITED(st) ? WEXITSTATUS(st) : -1;
 }
 
 /* ── Input device grab helpers ────────────────────────────────────────────── */
+
+/* g_touch_grabbed tracks current state so update_grabs() is idempotent
+ * (EVIOCGRAB returns EINVAL on a double-grab or spurious release). */
 static bool g_touch_grabbed = false;
 
 void grab(int fd, bool on)
@@ -163,6 +150,9 @@ void grab(int fd, bool on)
         log_err("EVIOCGRAB");
 }
 
+/* Touchscreen grabbed when menu is open or screen is blank.
+ * fbkeyboard is a virtual device on the touchscreen — grabbing the
+ * touchscreen implicitly disables it too. */
 void update_grabs(void)
 {
     bool want = (g_state == STATE_MENU || g_screen_blank);
@@ -200,7 +190,6 @@ void brightness_write(int level)
     if (!f) { log_err("open " BRIGHTNESS_PATH); return; }
     fprintf(f, "%d\n", level);
     fclose(f);
-    log_info("brightness -> %d", level);
 }
 
 /* ── Device open helper ───────────────────────────────────────────────────── */
