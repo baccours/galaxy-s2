@@ -15,7 +15,6 @@
 #define DEV_GPIO        "/dev/input/event0"
 #define DEV_TOUCHKEY    "/dev/input/event1"
 #define DEV_TOUCH       "/dev/input/event2"
-#define DEV_FBKBD       "/dev/input/event3"
 #define FB_BLANK_PATH      "/sys/class/graphics/fb0/blank"
 #define BRIGHTNESS_PATH    "/sys/class/backlight/spi3.0/brightness"
 #define BRIGHTNESS_MIN     0
@@ -47,7 +46,7 @@
  * FSM — States & Events
  * ═══════════════════════════════════════════════════════════════════════════ */
 typedef enum {
-    STATE_IDLE,       /* Screen on, terminal visible, no menu  */
+    STATE_IDLE,   /* Screen on, terminal visible, no menu  */
     STATE_MENU,       /* Menu visible and navigable            */
     STATE_BRIGHTNESS, /* Brightness adjustment overlay          */
     STATE_ANY,        /* Wildcard — matches any state in table */
@@ -84,7 +83,7 @@ struct Menu {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Global state — defined in main.c, used across all translation units
+ * Global state — defined in system.c, used across all translation units
  * ═══════════════════════════════════════════════════════════════════════════ */
 extern volatile sig_atomic_t g_running;
 extern AppState    g_state;
@@ -98,7 +97,6 @@ extern int         g_brightness;
 extern int g_fd_gpio;
 extern int g_fd_touchkey;
 extern int g_fd_touch;
-extern int g_fd_fbkbd;
 extern int g_fd_fb;
 
 /* ── Menu root (defined in menu.c) ───────────────────────────────────────── */
