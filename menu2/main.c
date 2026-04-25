@@ -11,7 +11,7 @@
  * how system calls are made (system.c).
  *
  * Build:
- *   gcc -O2 -Wall -Wextra -std=c11 -o main main.c menu.c system.c
+ *   gcc -O2 -Wall -Wextra -std=c11 -o menu main.c menu.c system.c
  */
 
 #include "main.h"
