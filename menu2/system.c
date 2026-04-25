@@ -112,21 +112,30 @@ int run_cmd(char *const argv[])
 }
 
 /* ── Input device grab helpers ────────────────────────────────────────────── */
+
+/* EVIOCGRAB returns EINVAL if you grab an already-grabbed fd, or release
+ * one that is not grabbed. Track state explicitly and make it idempotent. */
+static bool g_touch_grabbed = false;
+
 void grab(int fd, bool on)
 {
     if (fd < 0) return;
-    if (ioctl(fd, EVIOCGRAB, on ? (void *)1 : (void *)0) < 0 && on)
-        log_err("EVIOCGRAB");   /* only log failures when grabbing, not releasing */
+    if (ioctl(fd, EVIOCGRAB, on ? (void *)1 : (void *)0) < 0)
+        log_err("EVIOCGRAB %s", on ? "grab" : "release");
 }
 
 /*
  * Touchscreen: grabbed when menu open OR screen blank.
  * fbkeyboard is a virtual device layered on the touchscreen;
  * grabbing the touchscreen implicitly disables it too.
+ * Idempotent: only calls ioctl when the state actually changes.
  */
 void update_grabs(void)
 {
-    grab(g_fd_touch, g_state == STATE_MENU || g_screen_blank);
+    bool want = (g_state == STATE_MENU || g_screen_blank);
+    if (want == g_touch_grabbed) return;   /* no change needed */
+    grab(g_fd_touch, want);
+    g_touch_grabbed = want;
 }
 
 /* ── fbkeyboard OpenRC service ────────────────────────────────────────────── */
