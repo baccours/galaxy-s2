@@ -63,17 +63,20 @@ static void th_menu_select(void)
 
 /* th_close_menu is declared in main.h so menu.c's action_exit_menu can
  * call it without duplicating the state-transition logic. */
+/* Prevents th_open_menu re-firing from a duplicate MENU event in the
+ * same drain() pass that just called th_close_menu. */
+static bool g_menu_just_closed = false;
+
 void th_close_menu(void)
 {
-    g_menu  = &g_root_menu;
-    g_sel   = 0;
-    g_state = STATE_IDLE;
+    g_menu             = &g_root_menu;
+    g_sel              = 0;
+    g_state            = STATE_IDLE;
+    g_menu_just_closed = true;
     update_grabs();
     terminal_restore();
     fputs(T_CLEAR T_SHOW, stdout);
     fflush(stdout);
-    /* render() intentionally not called here: screen is clear,
-     * terminal is cooked, cursor is visible — nothing more to draw. */
 }
 
 static void th_menu_back(void)
@@ -89,12 +92,14 @@ static void th_menu_back(void)
 
 static void th_open_menu(void)
 {
-    if (g_screen_blank) return;           /* no menu on a blank screen */
+    if (g_screen_blank) return;
+    /* Swallow duplicate MENU event from same keypress that closed menu */
+    if (g_menu_just_closed) { g_menu_just_closed = false; return; }
     g_menu  = &g_root_menu;
     g_sel   = 0;
     g_state = STATE_MENU;
     update_grabs();
-    terminal_raw();                        /* disable echo/canon while navigating */
+    terminal_raw();
     fputs(T_HIDE, stdout);
     render();
 }
@@ -204,7 +209,11 @@ static void process_ev(const struct input_event *ev)
         case KEY_VOLUMEDOWN_CODE: fsm_dispatch(EVT_VOL_DOWN); break;
         case KEY_POWER_CODE:      fsm_dispatch(EVT_POWER);    break;
         case KEY_HOME_CODE:       fsm_dispatch(EVT_HOME_KEY); break;
-        case KEY_MENU_CODE:       fsm_dispatch(EVT_MENU_KEY); break;
+        case KEY_MENU_CODE:
+            /* Reset just_closed on a fresh key-down so next press opens normally */
+            if (g_state == STATE_IDLE) g_menu_just_closed = false;
+            fsm_dispatch(EVT_MENU_KEY);
+            break;
         case KEY_BACK_CODE:       fsm_dispatch(EVT_BACK_KEY); break;
         default: break;
     }
@@ -230,13 +239,10 @@ static void drain(int fd)
 
 static void cleanup(void)
 {
-    /* 1. Restore terminal first — most critical for the user's session.
-     *    Only emit ANSI resets if we were actually in raw mode; otherwise
-     *    the terminal was never touched and we leave it exactly as found. */
-    if (terminal_restore()) {
-        fputs(T_CLEAR T_RESET T_SHOW, stdout);
-        fflush(stdout);
-    }
+    /* 1. Restore terminal — terminal_close() is always safe to call. */
+    terminal_close();
+    fputs(T_CLEAR T_RESET T_SHOW, stdout);
+    fflush(stdout);
 
     /* 2. Release input grabs — device usable again immediately.
      * gpio and touchkey were grabbed at startup; always release them.
@@ -303,11 +309,25 @@ int main(void)
 
     g_menu = &g_root_menu;
 
-    /* Terminal stays in normal (cooked) mode at startup.
-     * terminal_raw() is called only when the menu opens (th_open_menu)
-     * and terminal_restore() is called when it closes (th_close_menu).
-     * This lets the user type normally in the terminal when the menu is off. */
+    /* Open /dev/tty once — terminal_raw()/terminal_restore() toggle
+     * termios flags on this persistent fd for the process lifetime.
+     * Terminal starts in normal (cooked) mode; raw is entered only
+     * when the menu opens and restored when it closes. */
     log_info("started — MENU button opens/closes menu");
+
+    if (!terminal_open()) {
+        cleanup();
+        return EXIT_FAILURE;
+    }
+
+    /* Discard any events queued in the input devices before we start
+     * processing — prevents spurious keypresses from boot triggering
+     * FSM transitions immediately. */
+    {
+        struct input_event dummy;
+        while (read(g_fd_gpio,     &dummy, sizeof(dummy)) > 0) {}
+        while (read(g_fd_touchkey, &dummy, sizeof(dummy)) > 0) {}
+    }
 
     while (g_running) {
         int n = poll(pfds, 2, -1);
