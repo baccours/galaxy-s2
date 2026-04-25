@@ -47,7 +47,7 @@
  * FSM — States & Events
  * ═══════════════════════════════════════════════════════════════════════════ */
 typedef enum {
-    STATE_IDLE,   /* Screen on, terminal visible, no menu  */
+    STATE_IDLE,       /* Screen on, terminal visible, no menu  */
     STATE_MENU,       /* Menu visible and navigable            */
     STATE_BRIGHTNESS, /* Brightness adjustment overlay          */
     STATE_ANY,        /* Wildcard — matches any state in table */
@@ -113,7 +113,7 @@ void log_info(const char *fmt, ...);
 void log_err (const char *fmt, ...);
 
 void terminal_raw    (void);
-void terminal_restore(void);
+bool terminal_restore(void);
 
 void fb_set_blank       (bool blank);
 int  brightness_read    (void);
