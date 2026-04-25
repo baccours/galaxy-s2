@@ -85,7 +85,6 @@ static void th_menu_back(void)
 static void th_open_menu(void)
 {
     if (g_screen_blank) return;           /* no menu on a blank screen */
-    if (g_fbkbd_on) fbkbd_set(false);    /* hide keyboard while in menu */
     g_menu  = &g_root_menu;
     g_sel   = 0;
     g_state = STATE_MENU;
@@ -238,13 +237,11 @@ static void cleanup(void)
     grab(g_fd_gpio,     false);
     grab(g_fd_touchkey, false);
     grab(g_fd_touch,    false);
-    grab(g_fd_fbkbd,    false);
 
     /* 3. Close file descriptors. */
     if (g_fd_gpio     >= 0) close(g_fd_gpio);
     if (g_fd_touchkey >= 0) close(g_fd_touchkey);
     if (g_fd_touch    >= 0) close(g_fd_touch);
-    if (g_fd_fbkbd    >= 0) close(g_fd_fbkbd);
 
     if (g_fd_fb >= 0) {
         fb_set_blank(false);
@@ -278,11 +275,10 @@ int main(void)
     if (g_fd_fb < 0) { log_err("open " FB_BLANK_PATH); return EXIT_FAILURE; }
 
     /* Button devices: grabbed permanently (sole consumer).
-     * Touch / fbkbd: opened ungrabbed; grab managed by update_grabs(). */
+     * Touchscreen: opened ungrabbed; grab managed by update_grabs(). */
     g_fd_gpio     = open_dev(DEV_GPIO,     true);
     g_fd_touchkey = open_dev(DEV_TOUCHKEY, true);
     g_fd_touch    = open_dev(DEV_TOUCH,    false);
-    g_fd_fbkbd    = open_dev(DEV_FBKBD,    false);
 
     if (g_fd_gpio < 0 || g_fd_touchkey < 0) {
         log_info("Cannot open required button devices — aborting.");
