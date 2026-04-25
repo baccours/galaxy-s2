@@ -239,10 +239,12 @@ static void drain(int fd)
 
 static void cleanup(void)
 {
-    /* 1. Restore terminal — terminal_close() is always safe to call. */
+    /* 1. Restore terminal — emit resets before closing g_tty. */
+    if (g_tty) {
+        fputs(T_CLEAR T_RESET T_SHOW, g_tty);
+        fflush(g_tty);
+    }
     terminal_close();
-    fputs(T_CLEAR T_RESET T_SHOW, g_tty);
-    fflush(g_tty);
 
     /* 2. Release input grabs — device usable again immediately.
      * gpio and touchkey were grabbed at startup; always release them.
