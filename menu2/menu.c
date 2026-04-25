@@ -1,320 +1,248 @@
 /*
- * main.c — FSM transition table, transition handlers, input translation,
- *           cleanup, and main().
+ * menu.c — menu tree, leaf actions, and rendering
  *
- * This file wires everything together.  It knows about:
- *   - the FSM (states, events, transition table)
- *   - input devices (poll loop, event → FsmEvent mapping)
- *   - process lifecycle (main, cleanup, signals)
+ * Owns: MenuItem/Menu static data, action callbacks, render().
+ * To add a menu entry: add an action function and a row in the relevant
+ * *_items[] array. No other file needs to change.
  *
- * It does NOT know about menu content or rendering (menu.c) or
- * how system calls are made (system.c).
- *
- * Build:
- *   gcc -O2 -Wall -Wextra -std=c11 -o menu main.c menu.c system.c
+ * Depends on: system.c (run_cmd, fb_set_blank, fbkbd_set, log_*)
+ *             main.c  (th_close_menu — exit-menu action)
  */
 
 #include "main.h"
 
-#include <errno.h>
-#include <fcntl.h>
-#include <linux/input.h>
-#include <poll.h>
-#include <signal.h>
+#include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <sys/ioctl.h>
-#include <unistd.h>
+#include <string.h>
+
+/* ── rfkill status helpers ────────────────────────────────────────────────── */
+
+/*
+ * Returns "ON" if the given rfkill type is unblocked, "OFF" if blocked.
+ * Reads /sys/class/rfkill/rfkillN/type and soft_blocked to avoid forking
+ * at render time — render is called on every keypress so we keep it cheap.
+ * Falls back to "?" if sysfs is unreadable (e.g. module not loaded).
+ */
+static const char *rfkill_status(const char *type)
+{
+    char path[64], buf[32];
+    for (int i = 0; i < 16; i++) {
+        snprintf(path, sizeof(path), "/sys/class/rfkill/rfkill%d/type", i);
+        FILE *ft = fopen(path, "r");
+        if (!ft) break;
+        bool match = (fgets(buf, sizeof(buf), ft) != NULL &&
+                      strncmp(buf, type, strlen(type)) == 0);
+        fclose(ft);
+        if (!match) continue;
+
+        snprintf(path, sizeof(path),
+                 "/sys/class/rfkill/rfkill%d/soft_blocked", i);
+        FILE *fb = fopen(path, "r");
+        if (!fb) return "?";
+        bool blocked = (fgets(buf, sizeof(buf), fb) != NULL && buf[0] == '1');
+        fclose(fb);
+        return blocked ? "OFF" : "ON";
+    }
+    return "?";
+}
+
+static const char *status_wifi(void)      { return rfkill_status("wlan");      }
+static const char *status_bt  (void)      { return rfkill_status("bluetooth"); }
+
+/* ── Forward declaration (body in main.c, visible via main.h) ───────────── */
+/* th_close_menu declared in main.h */
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * FSM — Transition handlers
- *
- * Each handler mutates global state (g_state, g_menu, g_sel, …) then
- * calls render() so the screen is always consistent after any transition.
+ * Leaf action callbacks
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-static void th_menu_up(void)
+static void action_wifi_toggle(void)
 {
-    g_sel = (g_sel > 0) ? g_sel - 1 : g_menu->count - 1;
-    render();
+    char *const chk[] = { "sh", "-c",
+        "rfkill list wifi | grep -q 'Soft blocked: no'", NULL };
+    bool enabled = (run_cmd(chk) == 0);
+    char *const off[] = { "rfkill", "block",   "wifi", NULL };
+    char *const on[]  = { "rfkill", "unblock", "wifi", NULL };
+    run_cmd(enabled ? off : on);
 }
 
-static void th_menu_down(void)
+static void action_bt_toggle(void)
 {
-    g_sel = (g_sel < g_menu->count - 1) ? g_sel + 1 : 0;
-    render();
+    char *const chk[] = { "sh", "-c",
+        "rfkill list bluetooth | grep -q 'Soft blocked: no'", NULL };
+    bool enabled = (run_cmd(chk) == 0);
+    char *const off[] = { "rfkill", "block",   "bluetooth", NULL };
+    char *const on[]  = { "rfkill", "unblock", "bluetooth", NULL };
+    run_cmd(enabled ? off : on);
 }
 
-static void th_menu_select(void)
+static void action_reboot(void)
 {
-    const MenuItem *item = &g_menu->items[g_sel];
-    if (item->submenu) {
-        g_menu = item->submenu;
-        g_sel  = 0;
-    } else if (item->action) {
-        item->action();
-        /* action may have changed g_state (e.g. action_exit_menu) */
-    }
-    render();
+    char *const a[] = { "reboot", NULL };
+    run_cmd(a);
 }
 
-/* th_close_menu is declared in main.h so menu.c's action_exit_menu can
- * call it without duplicating the state-transition logic. */
-void th_close_menu(void)
+static void action_poweroff(void)
 {
-    g_menu  = &g_root_menu;
-    g_sel   = 0;
-    g_state = STATE_IDLE;
-    update_grabs();
-    terminal_restore();                    /* give the terminal back to the user */
-    fputs(T_SHOW, stdout);
-    render();
+    char *const a[] = { "poweroff", NULL };
+    run_cmd(a);
 }
 
-static void th_menu_back(void)
-{
-    if (g_menu->parent) {
-        g_menu = g_menu->parent;
-        g_sel  = 0;
-        render();
-    } else {
-        th_close_menu();   /* at root — BACK exits the menu */
-    }
-}
+/* action_brightness — enters brightness overlay via FSM */
+static void action_brightness(void) { th_brightness_enter(); }
 
-static void th_open_menu(void)
-{
-    if (g_screen_blank) return;           /* no menu on a blank screen */
-    if (g_fbkbd_on) fbkbd_set(false);    /* hide keyboard while in menu */
-    g_menu  = &g_root_menu;
-    g_sel   = 0;
-    g_state = STATE_MENU;
-    update_grabs();
-    terminal_raw();                        /* disable echo/canon while navigating */
-    fputs(T_HIDE, stdout);
-    render();
-}
-
-static void th_idle_power(void)
-{
-    fb_set_blank(!g_screen_blank);
-    update_grabs();
-}
-
-static void th_home(void)
-{
-    /* HOME ignored in menu and on blank screen */
-    if (g_state == STATE_MENU || g_screen_blank) return;
-    fbkbd_set(!g_fbkbd_on);
-}
-
-/* Brightness overlay handlers */
-void th_brightness_enter(void)
-{
-    g_brightness = brightness_read();  /* sync with real hw value */
-    g_state = STATE_BRIGHTNESS;
-    render();
-}
-
-static void th_brightness_up(void)
-{
-    brightness_write(g_brightness + 1);
-    render();
-}
-
-static void th_brightness_down(void)
-{
-    brightness_write(g_brightness - 1);
-    render();
-}
-
-static void th_brightness_exit(void)
-{
-    g_state = STATE_MENU;
-    render();
-}
+/* Delegates to th_close_menu (FSM handler) so the state transition is
+ * always driven through the FSM, not duplicated here. */
+static void action_exit_menu(void) { th_close_menu(); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * FSM — Declarative transition table
+ * Menu tree
  *
- *   { state, event, handler }
- *   STATE_ANY = wildcard — matches any current state.
- *   First match wins: specific states must appear before STATE_ANY rows.
+ * Edit only these tables to add/remove/reorder entries.
+ * Parent pointers are set at runtime in main() — C static initialisers
+ * cannot forward-reference an object defined later in the same TU.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-typedef void (*TransitionFn)(void);
-
-typedef struct {
-    AppState     state;
-    FsmEvent     event;
-    TransitionFn handler;
-} Transition;
-
-static const Transition TRANSITIONS[] = {
-    /* ── Menu navigation ─────────────────────────────────────────────── */
-    { STATE_MENU, EVT_VOL_UP,    th_menu_up     },
-    { STATE_MENU, EVT_VOL_DOWN,  th_menu_down   },
-    { STATE_MENU, EVT_POWER,     th_menu_select },
-    { STATE_MENU, EVT_BACK_KEY,  th_menu_back   },
-    { STATE_MENU, EVT_MENU_KEY,  th_close_menu  },
-
-    /* ── Brightness overlay ──────────────────────────────────────────── */
-    { STATE_BRIGHTNESS, EVT_VOL_UP,   th_brightness_up   },
-    { STATE_BRIGHTNESS, EVT_VOL_DOWN, th_brightness_down },
-    { STATE_BRIGHTNESS, EVT_POWER,    th_brightness_exit },
-    { STATE_BRIGHTNESS, EVT_BACK_KEY, th_brightness_exit },
-
-    /* ── Idle-specific ────────────────────────────────────────────────── */
-    { STATE_IDLE, EVT_POWER,     th_idle_power  },
-
-    /* ── Global (STATE_ANY after all specific rows) ───────────────────── */
-    { STATE_ANY,  EVT_MENU_KEY,  th_open_menu   },
-    { STATE_ANY,  EVT_HOME_KEY,  th_home        },
-    { STATE_ANY,  EVT_POWER,     th_idle_power  }, /* unblank from blank  */
+static MenuItem g_net_items[] = {
+    { "Toggle WiFi",      action_wifi_toggle, NULL, status_wifi },
+    { "Toggle Bluetooth", action_bt_toggle,   NULL, status_bt   },
 };
-#define TRANSITION_COUNT (sizeof(TRANSITIONS) / sizeof(TRANSITIONS[0]))
+Menu g_net_menu = { "Networking", g_net_items, 2, NULL };
 
-static void fsm_dispatch(FsmEvent evt)
-{
-    for (size_t i = 0; i < TRANSITION_COUNT; i++) {
-        const Transition *t = &TRANSITIONS[i];
-        if ((t->state == STATE_ANY || t->state == g_state) && t->event == evt) {
-            t->handler();
-            return;   /* first match wins */
-        }
-    }
-    /* Unhandled event in this state — silently ignored by design */
-}
+static MenuItem g_pwr_items[] = {
+    { "Reboot",    action_reboot,   NULL, NULL },
+    { "Power Off", action_poweroff, NULL, NULL },
+};
+Menu g_pwr_menu = { "Power", g_pwr_items, 2, NULL };
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * Input event → FSM event translation
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-static void process_ev(const struct input_event *ev)
-{
-    if (ev->type != EV_KEY) return;
-    if (ev->value != 1)     return;   /* key-down only; ignore repeat & up */
-
-    switch (ev->code) {
-        case KEY_VOLUMEUP_CODE:   fsm_dispatch(EVT_VOL_UP);   break;
-        case KEY_VOLUMEDOWN_CODE: fsm_dispatch(EVT_VOL_DOWN); break;
-        case KEY_POWER_CODE:      fsm_dispatch(EVT_POWER);    break;
-        case KEY_HOME_CODE:       fsm_dispatch(EVT_HOME_KEY); break;
-        case KEY_MENU_CODE:       fsm_dispatch(EVT_MENU_KEY); break;
-        case KEY_BACK_CODE:       fsm_dispatch(EVT_BACK_KEY); break;
-        default: break;
-    }
-}
-
-/* Drain all pending events from one fd into the FSM */
-static void drain(int fd)
-{
-    struct input_event buf[32];
-    ssize_t n;
-    while ((n = read(fd, buf, sizeof(buf))) > 0) {
-        int cnt = (int)(n / (ssize_t)sizeof(struct input_event));
-        for (int i = 0; i < cnt; i++)
-            process_ev(&buf[i]);
-    }
-    if (n < 0 && errno != EAGAIN && errno != EINTR)
-        log_err("read event");
-}
+static MenuItem g_root_items[] = {
+    { "Networking",  NULL,              &g_net_menu, NULL },
+    { "Power",       NULL,              &g_pwr_menu, NULL },
+    { "Brightness",  action_brightness, NULL,        NULL },
+    { "Exit Menu",   action_exit_menu,  NULL,        NULL },
+};
+const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, 4, NULL };
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Cleanup & signals
+ * Rendering — single entry point
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-static void cleanup(void)
+static void render_menu(void)
 {
-    /* 1. Restore terminal first — most critical for the user's session.
-     *    Only emit ANSI resets if we were actually in raw mode; otherwise
-     *    the terminal was never touched and we leave it exactly as found. */
-    if (terminal_restore()) {
-        fputs(T_CLEAR T_RESET T_SHOW, stdout);
-        fflush(stdout);
+    /* Breadcrumb: walk from current node to root via parent pointers,
+     * collect the path, then print root-first. */
+    const Menu *path[16];
+    int depth = 0;
+    for (const Menu *m = g_menu; m && depth < 16; m = m->parent)
+        path[depth++] = m;
+
+    fputs(T_BOLD T_CYAN, stdout);
+
+    /* Top border */
+    fputs("+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
+
+    /* Breadcrumb row */
+    fputs("| " T_YELLOW, stdout);
+    int used = 0;
+    for (int i = depth - 1; i >= 0; i--) {
+        int n = fprintf(stdout, "%s%s", path[i]->title, i > 0 ? " > " : "");
+        if (n > 0) used += n;
+    }
+    for (int i = used; i < BOX_W - 2; i++) fputc(' ', stdout);
+    fputs(T_CYAN " |\r\n", stdout);
+
+    /* Separator */
+    fputs("+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
+
+    /* Items */
+    for (uint8_t i = 0; i < g_menu->count; i++) {
+        bool        sel    = (i == g_sel);
+        bool        has_sub = (g_menu->items[i].submenu != NULL);
+        const char *badge  = g_menu->items[i].status
+                             ? g_menu->items[i].status() : NULL;
+        /*
+         * Layout: "| " + label + padding + badge/arrow + " |"
+         * badge replaces the submenu arrow when present.
+         * badge is right-aligned; label is left-aligned within the remainder.
+         */
+        const char *arrow  = has_sub ? ">" : " ";
+        char        badge_buf[8] = "  ";   /* two spaces when no badge */
+        if (badge)
+            snprintf(badge_buf, sizeof(badge_buf), "%-3s", badge);
+
+        if (sel)
+            printf("| " T_REV T_BOLD "%-*s%s%s" T_RESET T_CYAN " |\r\n",
+                   BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
+        else
+            printf("| " T_RESET "%-*s%s%s" T_CYAN " |\r\n",
+                   BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
     }
 
-    /* 2. Release input grabs — device usable again immediately. */
-    grab(g_fd_gpio,     false);
-    grab(g_fd_touchkey, false);
-    grab(g_fd_touch,    false);
-    grab(g_fd_fbkbd,    false);
+    /* Bottom border */
+    fputs(T_CYAN "+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
 
-    /* 3. Close file descriptors. */
-    if (g_fd_gpio     >= 0) close(g_fd_gpio);
-    if (g_fd_touchkey >= 0) close(g_fd_touchkey);
-    if (g_fd_touch    >= 0) close(g_fd_touch);
-    if (g_fd_fbkbd    >= 0) close(g_fd_fbkbd);
-
-    if (g_fd_fb >= 0) {
-        fb_set_blank(false);
-        close(g_fd_fb);
-    }
-
-    log_info("done");
+    fputs(T_DIM "VOL+/-: navigate   PWR: select   BACK: back\r\n"
+          T_RESET, stdout);
 }
 
-static void sig_handler(int s) { (void)s; g_running = 0; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
- * main
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-int main(void)
+static void render_brightness(void)
 {
-    /* Signals */
-    struct sigaction sa = { .sa_handler = sig_handler };
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGINT,  &sa, NULL);
-    sigaction(SIGHUP,  &sa, NULL);
-    sigaction(SIGCHLD, &(struct sigaction){ .sa_handler = SIG_DFL }, NULL);
+    fputs(T_BOLD T_CYAN, stdout);
 
-    /* Link submenu parent pointers — cannot be done in static initialisers */
-    g_net_menu.parent = &g_root_menu;
-    g_pwr_menu.parent = &g_root_menu;
+    /* Box top */
+    fputs("+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
 
-    /* Open fb_blank once; reused for every screen-blank write */
-    g_fd_fb = open(FB_BLANK_PATH, O_WRONLY | O_CLOEXEC);
-    if (g_fd_fb < 0) { log_err("open " FB_BLANK_PATH); return EXIT_FAILURE; }
+    /* Title */
+    fputs("| " T_YELLOW, stdout);
+    int tlen = fprintf(stdout, "Brightness");
+    for (int i = tlen; i < BOX_W - 2; i++) fputc(' ', stdout);
+    fputs(T_CYAN " |\r\n", stdout);
 
-    /* Button devices: grabbed permanently (sole consumer).
-     * Touch / fbkbd: opened ungrabbed; grab managed by update_grabs(). */
-    g_fd_gpio     = open_dev(DEV_GPIO,     true);
-    g_fd_touchkey = open_dev(DEV_TOUCHKEY, true);
-    g_fd_touch    = open_dev(DEV_TOUCH,    false);
-    g_fd_fbkbd    = open_dev(DEV_FBKBD,    false);
+    /* Separator */
+    fputs("+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
 
-    if (g_fd_gpio < 0 || g_fd_touchkey < 0) {
-        log_info("Cannot open required button devices — aborting.");
-        cleanup();
-        return EXIT_FAILURE;
+    /* Level fraction */
+    printf("| " T_RESET " %2d / %-2d " T_CYAN, g_brightness, BRIGHTNESS_MAX);
+
+    /* Bar: filled portion in bold white, empty in dim */
+    fputs(T_BOLD "[", stdout);
+    for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
+        if (i == g_brightness) fputs(T_DIM, stdout);
+        fputc(i < g_brightness ? '#' : '-', stdout);
     }
+    fputs(T_RESET T_CYAN "]", stdout);
 
-    /* poll(2) on 2 fds — appropriate for this device count */
-    struct pollfd pfds[2] = {
-        { .fd = g_fd_gpio,     .events = POLLIN },
-        { .fd = g_fd_touchkey, .events = POLLIN },
-    };
+    /* Pad remainder of the row */
+    /* bar occupies: 1 "[" + (BRIGHTNESS_MAX+1) chars + 1 "]" = 27 chars
+     * prefix "| " + " %2d / %-2d " = 11 chars  → total = 38; clip to box */
+    fputs(" |\r\n", stdout);
 
-    g_menu = &g_root_menu;
+    /* Box bottom */
+    fputs(T_CYAN "+", stdout);
+    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
+    fputs("+\r\n", stdout);
 
-    /* Terminal stays in normal (cooked) mode at startup.
-     * terminal_raw() is called only when the menu opens (th_open_menu)
-     * and terminal_restore() is called when it closes (th_close_menu).
-     * This lets the user type normally in the terminal when the menu is off. */
-    log_info("started — MENU button opens/closes menu");
+    fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, stdout);
+}
 
-    while (g_running) {
-        int n = poll(pfds, 2, -1);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            log_err("poll");
-            break;
-        }
-        if (pfds[0].revents & POLLIN) drain(g_fd_gpio);
-        if (pfds[1].revents & POLLIN) drain(g_fd_touchkey);
+/* Unified render — always clears, then delegates on g_state */
+void render(void)
+{
+    fputs(T_CLEAR, stdout);
+    switch (g_state) {
+        case STATE_MENU:       render_menu();       break;
+        case STATE_BRIGHTNESS: render_brightness(); break;
+        default:                                    break;
     }
-
-    cleanup();
-    return EXIT_SUCCESS;
+    fflush(stdout);
 }
