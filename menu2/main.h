@@ -16,10 +16,11 @@
 #define DEV_GPIO        "/dev/input/event0"
 #define DEV_TOUCHKEY    "/dev/input/event1"
 #define DEV_TOUCH       "/dev/input/event2"
-#define FB_BLANK_PATH      "/sys/class/graphics/fb0/blank"
-#define BRIGHTNESS_PATH    "/sys/class/backlight/spi3.0/brightness"
-#define BRIGHTNESS_MIN     0
-#define BRIGHTNESS_MAX     24
+#define DEV_TTY         "/dev/tty1"
+#define FB_BLANK_PATH   "/sys/class/graphics/fb0/blank"
+#define BRIGHTNESS_PATH "/sys/class/backlight/spi3.0/brightness"
+#define BRIGHTNESS_MIN  0
+#define BRIGHTNESS_MAX  24
 #define BRIGHTNESS_DEFAULT 12
 
 /* ── Key codes ────────────────────────────────────────────────────────────── */
@@ -43,14 +44,12 @@
 
 #define BOX_W 30   /* printable width of the menu box interior */
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * FSM — States & Events
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── FSM states & events ─────────────────────────────────────────────────── */
 typedef enum {
-    STATE_IDLE,   /* Screen on, terminal visible, no menu  */
-    STATE_MENU,       /* Menu visible and navigable            */
-    STATE_BRIGHTNESS, /* Brightness adjustment overlay          */
-    STATE_ANY,        /* Wildcard — matches any state in table */
+    STATE_IDLE,       /* screen on, no menu                    */
+    STATE_MENU,       /* menu visible and navigable            */
+    STATE_BRIGHTNESS, /* brightness adjustment overlay         */
+    STATE_ANY,        /* wildcard — matches any state in table */
 } AppState;
 
 typedef enum {
@@ -62,30 +61,26 @@ typedef enum {
     EVT_HOME_KEY,
 } FsmEvent;
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * Menu types
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Menu types ───────────────────────────────────────────────────────────── */
 typedef struct Menu Menu;
 typedef void        (*ActionFn)(void);
-typedef const char *(*StatusFn)(void);  /* returns "ON"/"OFF"/NULL at render time */
+typedef const char *(*StatusFn)(void);   /* returns "ON"/"OFF"/NULL at render time */
 
 typedef struct {
     const char *label;
-    ActionFn    action;   /* NULL for submenu items                */
-    Menu       *submenu;  /* NULL for leaf items                   */
-    StatusFn    status;   /* NULL = no badge; else called at draw  */
+    ActionFn    action;   /* NULL for submenu nodes */
+    Menu       *submenu;  /* NULL for leaf items    */
+    StatusFn    status;   /* NULL = no badge        */
 } MenuItem;
 
 struct Menu {
     const char *title;
     MenuItem   *items;
     uint8_t     count;
-    const Menu *parent;  /* NULL at root; set at runtime for submenus */
+    const Menu *parent;   /* NULL at root; linked at runtime for submenus */
 };
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * Global state — defined in system.c, used across all translation units
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Global state — defined in system.c ──────────────────────────────────── */
 extern volatile sig_atomic_t g_running;
 extern AppState    g_state;
 extern bool        g_screen_blank;
@@ -94,46 +89,41 @@ extern const Menu *g_menu;
 extern uint8_t     g_sel;
 extern int         g_brightness;
 
-/* File descriptors (system.c owns open/close, all TUs may read) */
-extern int g_fd_gpio;
-extern int g_fd_touchkey;
-extern int g_fd_touch;
+extern int   g_fd_gpio;
+extern int   g_fd_touchkey;
+extern int   g_fd_touch;
 extern int   g_fd_fb;
-extern FILE *g_tty;    /* /dev/tty1 — all display output goes here */
+extern FILE *g_tty;   /* DEV_TTY — all display output goes here */
 
-/* ── Menu root (defined in menu.c) ───────────────────────────────────────── */
+/* ── Menu tree — defined in menu.c ───────────────────────────────────────── */
 extern const Menu g_root_menu;
 extern Menu       g_net_menu;
 extern Menu       g_pwr_menu;
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * system.c — public API
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── system.c API ────────────────────────────────────────────────────────── */
 void log_info(const char *fmt, ...);
 void log_err (const char *fmt, ...);
 
-bool terminal_open   (void);   /* call once at startup */
+bool terminal_open   (void);
 void terminal_raw    (void);
 bool terminal_restore(void);
-void terminal_close  (void);   /* call once at shutdown */
+void terminal_close  (void);
 
-void fb_set_blank       (bool blank);
-int  brightness_read    (void);
-void brightness_write   (int level);
-int  run_cmd      (char *const argv[]);
-void grab         (int fd, bool on);
-void update_grabs (void);
-void fbkbd_set    (bool start);
-int  open_dev     (const char *path, bool grab_now);
+void fb_set_blank    (bool blank);
+int  brightness_read (void);
+void brightness_write(int level);
+int  run_cmd         (char *const argv[]);
+void grab            (int fd, bool on);
+void update_grabs    (void);
+void fbkbd_set       (bool start);
+int  open_dev        (const char *path, bool grab_now);
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * menu.c — public API
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── menu.c API ──────────────────────────────────────────────────────────── */
 void render(void);
 
-/* th_close_menu is also needed by menu.c's action_exit_menu;
- * declared here so menu.c can call it without knowing FSM internals. */
-void th_close_menu(void);
-void th_brightness_enter(void);  /* called by action_brightness in menu.c */
+/* Declared here so menu.c's action callbacks can trigger FSM transitions
+ * without duplicating state-mutation logic. */
+void th_close_menu      (void);
+void th_brightness_enter(void);
 
 #endif /* MAIN_H */
