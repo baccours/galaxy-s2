@@ -51,11 +51,14 @@ static void th_menu_select(void)
     if (item->submenu) {
         g_menu = item->submenu;
         g_sel  = 0;
+        render();
     } else if (item->action) {
         item->action();
-        /* action may have changed g_state (e.g. action_exit_menu) */
+        /* action may have changed g_state (e.g. th_close_menu);
+         * only re-render if still in a menu state. */
+        if (g_state == STATE_MENU || g_state == STATE_BRIGHTNESS)
+            render();
     }
-    render();
 }
 
 /* th_close_menu is declared in main.h so menu.c's action_exit_menu can
@@ -235,10 +238,14 @@ static void cleanup(void)
         fflush(stdout);
     }
 
-    /* 2. Release input grabs — device usable again immediately. */
+    /* 2. Release input grabs — device usable again immediately.
+     * gpio and touchkey were grabbed at startup; always release them.
+     * Touch is managed via update_grabs() — release only if grabbed. */
     grab(g_fd_gpio,     false);
     grab(g_fd_touchkey, false);
-    grab(g_fd_touch,    false);
+    g_state = STATE_IDLE;   /* force update_grabs to release touch */
+    g_screen_blank = false;
+    update_grabs();         /* releases touch if it was grabbed */
 
     /* 3. Close file descriptors. */
     if (g_fd_gpio     >= 0) close(g_fd_gpio);
