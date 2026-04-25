@@ -5,6 +5,7 @@
  *       EVIOCGRAB wrappers, fbkeyboard OpenRC service, logging.
  *
  * Nothing here knows about menus or the FSM.
+ * Binary: menu
  */
 
 #include "main.h"
@@ -53,10 +54,12 @@ void terminal_raw(void)
     tcsetattr(STDOUT_FILENO, TCSAFLUSH, &t);
 }
 
-void terminal_restore(void)
+bool terminal_restore(void)
 {
-    if (g_termios_saved)
-        tcsetattr(STDOUT_FILENO, TCSAFLUSH, &g_orig_termios);
+    if (!g_termios_saved) return false;
+    tcsetattr(STDOUT_FILENO, TCSAFLUSH, &g_orig_termios);
+    g_termios_saved = false;   /* allow re-entry after next terminal_raw() */
+    return true;
 }
 
 /* ── Logging ──────────────────────────────────────────────────────────────── */
