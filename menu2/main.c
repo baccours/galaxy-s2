@@ -2,16 +2,8 @@
  * main.c — FSM transition table, transition handlers, input translation,
  *           cleanup, and main().
  *
- * This file wires everything together.  It knows about:
- *   - the FSM (states, events, transition table)
- *   - input devices (poll loop, event → FsmEvent mapping)
- *   - process lifecycle (main, cleanup, signals)
- *
- * It does NOT know about menu content or rendering (menu.c) or
- * how system calls are made (system.c).
- *
  * Build:
- *   gcc -O2 -Wall -Wextra -std=c11 -o menu main.c menu.c system.c
+ *   gcc -Os -Wall -Wextra -std=c11 -o menu main.c menu.c system.c
  */
 
 #include "main.h"
@@ -26,12 +18,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * FSM — Transition handlers
- *
- * Each handler mutates global state (g_state, g_menu, g_sel, …) then
- * calls render() so the screen is always consistent after any transition.
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── FSM transition handlers ─────────────────────────────────────────────── */
 
 static void th_menu_up(void)
 {
@@ -61,18 +48,11 @@ static void th_menu_select(void)
     }
 }
 
-/* th_close_menu is declared in main.h so menu.c's action_exit_menu can
- * call it without duplicating the state-transition logic. */
-/* Prevents th_open_menu re-firing from a duplicate MENU event in the
- * same drain() pass that just called th_close_menu. */
-static bool g_menu_just_closed = false;
-
 void th_close_menu(void)
 {
-    g_menu             = &g_root_menu;
-    g_sel              = 0;
-    g_state            = STATE_IDLE;
-    g_menu_just_closed = true;
+    g_menu  = &g_root_menu;
+    g_sel   = 0;
+    g_state = STATE_IDLE;
     update_grabs();
     terminal_restore();
     fputs(T_CLEAR T_SHOW, g_tty);
@@ -86,15 +66,13 @@ static void th_menu_back(void)
         g_sel  = 0;
         render();
     } else {
-        th_close_menu();   /* at root — BACK exits the menu */
+        th_close_menu();
     }
 }
 
 static void th_open_menu(void)
 {
     if (g_screen_blank) return;
-    /* Swallow duplicate MENU event from same keypress that closed menu */
-    if (g_menu_just_closed) { g_menu_just_closed = false; return; }
     g_menu  = &g_root_menu;
     g_sel   = 0;
     g_state = STATE_MENU;
@@ -112,15 +90,13 @@ static void th_idle_power(void)
 
 static void th_home(void)
 {
-    /* HOME ignored in menu and on blank screen */
     if (g_state == STATE_MENU || g_screen_blank) return;
     fbkbd_set(!g_fbkbd_on);
 }
 
-/* Brightness overlay handlers */
 void th_brightness_enter(void)
 {
-    g_brightness = brightness_read();  /* sync with real hw value */
+    g_brightness = brightness_read();
     g_state = STATE_BRIGHTNESS;
     render();
 }
@@ -143,14 +119,10 @@ static void th_brightness_exit(void)
     render();
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * FSM — Declarative transition table
- *
- *   { state, event, handler }
- *   STATE_ANY = wildcard — matches any current state.
- *   First match wins: specific states must appear before STATE_ANY rows.
- * ═══════════════════════════════════════════════════════════════════════════ */
-
+/* ── FSM declarative transition table ────────────────────────────────────────
+ * { state, event, handler } — STATE_ANY matches any state.
+ * First match wins: specific states must appear before STATE_ANY rows.
+ */
 typedef void (*TransitionFn)(void);
 
 typedef struct {
@@ -160,26 +132,22 @@ typedef struct {
 } Transition;
 
 static const Transition TRANSITIONS[] = {
-    /* ── Menu navigation ─────────────────────────────────────────────── */
-    { STATE_MENU, EVT_VOL_UP,    th_menu_up     },
-    { STATE_MENU, EVT_VOL_DOWN,  th_menu_down   },
-    { STATE_MENU, EVT_POWER,     th_menu_select },
-    { STATE_MENU, EVT_BACK_KEY,  th_menu_back   },
-    { STATE_MENU, EVT_MENU_KEY,  th_close_menu  },
+    { STATE_MENU,       EVT_VOL_UP,    th_menu_up         },
+    { STATE_MENU,       EVT_VOL_DOWN,  th_menu_down       },
+    { STATE_MENU,       EVT_POWER,     th_menu_select     },
+    { STATE_MENU,       EVT_BACK_KEY,  th_menu_back       },
+    { STATE_MENU,       EVT_MENU_KEY,  th_close_menu      },
 
-    /* ── Brightness overlay ──────────────────────────────────────────── */
-    { STATE_BRIGHTNESS, EVT_VOL_UP,   th_brightness_up   },
-    { STATE_BRIGHTNESS, EVT_VOL_DOWN, th_brightness_down },
-    { STATE_BRIGHTNESS, EVT_POWER,    th_brightness_exit },
-    { STATE_BRIGHTNESS, EVT_BACK_KEY, th_brightness_exit },
+    { STATE_BRIGHTNESS, EVT_VOL_UP,    th_brightness_up   },
+    { STATE_BRIGHTNESS, EVT_VOL_DOWN,  th_brightness_down },
+    { STATE_BRIGHTNESS, EVT_POWER,     th_brightness_exit },
+    { STATE_BRIGHTNESS, EVT_BACK_KEY,  th_brightness_exit },
 
-    /* ── Idle-specific ────────────────────────────────────────────────── */
-    { STATE_IDLE, EVT_POWER,     th_idle_power  },
+    { STATE_IDLE,       EVT_POWER,     th_idle_power      },
 
-    /* ── Global (STATE_ANY after all specific rows) ───────────────────── */
-    { STATE_ANY,  EVT_MENU_KEY,  th_open_menu   },
-    { STATE_ANY,  EVT_HOME_KEY,  th_home        },
-    { STATE_ANY,  EVT_POWER,     th_idle_power  }, /* unblank from blank  */
+    { STATE_ANY,        EVT_MENU_KEY,  th_open_menu       },
+    { STATE_ANY,        EVT_HOME_KEY,  th_home            },
+    { STATE_ANY,        EVT_POWER,     th_idle_power      },  /* unblank */
 };
 #define TRANSITION_COUNT (sizeof(TRANSITIONS) / sizeof(TRANSITIONS[0]))
 
@@ -189,37 +157,28 @@ static void fsm_dispatch(FsmEvent evt)
         const Transition *t = &TRANSITIONS[i];
         if ((t->state == STATE_ANY || t->state == g_state) && t->event == evt) {
             t->handler();
-            return;   /* first match wins */
+            return;
         }
     }
-    /* Unhandled event in this state — silently ignored by design */
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * Input event → FSM event translation
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Input event → FSM event translation ─────────────────────────────────── */
 
 static void process_ev(const struct input_event *ev)
 {
-    if (ev->type != EV_KEY) return;
-    if (ev->value != 1)     return;   /* key-down only; ignore repeat & up */
+    if (ev->type != EV_KEY || ev->value != 1) return;   /* key-down only */
 
     switch (ev->code) {
         case KEY_VOLUMEUP_CODE:   fsm_dispatch(EVT_VOL_UP);   break;
         case KEY_VOLUMEDOWN_CODE: fsm_dispatch(EVT_VOL_DOWN); break;
         case KEY_POWER_CODE:      fsm_dispatch(EVT_POWER);    break;
         case KEY_HOME_CODE:       fsm_dispatch(EVT_HOME_KEY); break;
-        case KEY_MENU_CODE:
-            /* Reset just_closed on a fresh key-down so next press opens normally */
-            if (g_state == STATE_IDLE) g_menu_just_closed = false;
-            fsm_dispatch(EVT_MENU_KEY);
-            break;
+        case KEY_MENU_CODE:       fsm_dispatch(EVT_MENU_KEY); break;
         case KEY_BACK_CODE:       fsm_dispatch(EVT_BACK_KEY); break;
         default: break;
     }
 }
 
-/* Drain all pending events from one fd into the FSM */
 static void drain(int fd)
 {
     struct input_event buf[32];
@@ -233,29 +192,22 @@ static void drain(int fd)
         log_err("read event");
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * Cleanup & signals
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── Cleanup & signals ────────────────────────────────────────────────────── */
 
 static void cleanup(void)
 {
-    /* 1. Restore terminal — emit resets before closing g_tty. */
     if (g_tty) {
         fputs(T_CLEAR T_RESET T_SHOW, g_tty);
         fflush(g_tty);
     }
     terminal_close();
 
-    /* 2. Release input grabs — device usable again immediately.
-     * gpio and touchkey were grabbed at startup; always release them.
-     * Touch is managed via update_grabs() — release only if grabbed. */
     grab(g_fd_gpio,     false);
     grab(g_fd_touchkey, false);
-    g_state = STATE_IDLE;   /* force update_grabs to release touch */
+    g_state        = STATE_IDLE;
     g_screen_blank = false;
-    update_grabs();         /* releases touch if it was grabbed */
+    update_grabs();
 
-    /* 3. Close file descriptors. */
     if (g_fd_gpio     >= 0) close(g_fd_gpio);
     if (g_fd_touchkey >= 0) close(g_fd_touchkey);
     if (g_fd_touch    >= 0) close(g_fd_touch);
@@ -270,65 +222,51 @@ static void cleanup(void)
 
 static void sig_handler(int s) { (void)s; g_running = 0; }
 
-/* ═══════════════════════════════════════════════════════════════════════════
- * main
- * ═══════════════════════════════════════════════════════════════════════════ */
+/* ── main ────────────────────────────────────────────────────────────────── */
 
 int main(void)
 {
-    /* Signals */
     struct sigaction sa = { .sa_handler = sig_handler };
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT,  &sa, NULL);
     sigaction(SIGHUP,  &sa, NULL);
     sigaction(SIGCHLD, &(struct sigaction){ .sa_handler = SIG_DFL }, NULL);
 
-    /* Link submenu parent pointers — cannot be done in static initialisers */
+    /* Parent pointers cannot be set in static initialisers */
     g_net_menu.parent = &g_root_menu;
     g_pwr_menu.parent = &g_root_menu;
 
-    /* Open fb_blank once; reused for every screen-blank write */
-    g_fd_fb = open(FB_BLANK_PATH, O_WRONLY | O_CLOEXEC);
-    if (g_fd_fb < 0) { log_err("open " FB_BLANK_PATH); return EXIT_FAILURE; }
-
-    /* Button devices: grabbed permanently (sole consumer).
-     * Touchscreen: opened ungrabbed; grab managed by update_grabs(). */
+    g_fd_fb       = open(FB_BLANK_PATH, O_WRONLY | O_CLOEXEC);
     g_fd_gpio     = open_dev(DEV_GPIO,     true);
     g_fd_touchkey = open_dev(DEV_TOUCHKEY, true);
     g_fd_touch    = open_dev(DEV_TOUCH,    false);
 
-    if (g_fd_gpio < 0 || g_fd_touchkey < 0) {
-        log_info("Cannot open required button devices — aborting.");
+    if (g_fd_fb < 0 || g_fd_gpio < 0 || g_fd_touchkey < 0) {
+        log_err("open required device");
         cleanup();
         return EXIT_FAILURE;
     }
 
-    /* poll(2) on 2 fds — appropriate for this device count */
-    struct pollfd pfds[2] = {
-        { .fd = g_fd_gpio,     .events = POLLIN },
-        { .fd = g_fd_touchkey, .events = POLLIN },
-    };
-
-    g_menu = &g_root_menu;
-
-    /* Open /dev/tty once — terminal_raw()/terminal_restore() toggle
-     * termios flags on this persistent fd for the process lifetime.
-     * Terminal starts in normal (cooked) mode; raw is entered only
-     * when the menu opens and restored when it closes. */
-if (!terminal_open()) {
+    if (!terminal_open()) {
         cleanup();
         return EXIT_FAILURE;
     }
 
-    /* Discard any key events queued before we started — e.g. the
-     * keypress used to launch the program sitting in the kernel buffer. */
+    /* Discard events queued before startup (e.g. the keypress that launched us) */
     {
         struct input_event dummy;
         while (read(g_fd_gpio,     &dummy, sizeof(dummy)) > 0) {}
         while (read(g_fd_touchkey, &dummy, sizeof(dummy)) > 0) {}
     }
 
-    log_info("started — MENU button opens/closes menu");
+    g_menu = &g_root_menu;
+
+    struct pollfd pfds[2] = {
+        { .fd = g_fd_gpio,     .events = POLLIN },
+        { .fd = g_fd_touchkey, .events = POLLIN },
+    };
+
+    log_info("started");
 
     while (g_running) {
         int n = poll(pfds, 2, -1);
