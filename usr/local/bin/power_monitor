@@ -1,0 +1,26 @@
+#!/bin/sh
+
+# Configuration
+VOLT_LIMIT=3350000
+BATT_DIR="/sys/class/power_supply/max170xx_battery"
+CHG_DIR="/sys/class/power_supply/max8997_pmic"
+
+# Check if charger is connected (1 = plugged in, 0 = battery)
+IS_CHG=$(/usr/bin/cat "$CHG_DIR/online" 2>/dev/null || echo 0)
+if [ "$IS_CHG" -eq 1 ]; then
+  # Device is plugged in; do nothing
+  exit 0
+fi
+
+# Read battery metrics
+VOLT=$(/usr/bin/cat "$BATT_DIR/voltage_now" 2>/dev/null \
+       || echo 9999999)
+
+# If battery is low AND not plugged in, kill power
+if [ "$VOLT" -le "$VOLT_LIMIT" ]; then
+  # Log the event
+  echo "$(date): Battery ($VOLT uV). Powering off." \
+    >> /var/log/power_monitor.log
+  sync
+  /usr/sbin/poweroff
+fi

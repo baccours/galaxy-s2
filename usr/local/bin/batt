@@ -1,0 +1,22 @@
+#!/bin/sh
+
+BATT_DIR="/sys/class/power_supply/max170xx_battery"
+CHG_DIR="/sys/class/power_supply/max8997_pmic"
+
+# Get the Open Circuit Voltage in millivolts
+VOLT=$(( $(cat "$BATT_DIR/voltage_ocv") / 1000 ))
+
+# Range (3300mV to 4200mV)
+MIN=3300
+#MAX=4200
+
+# Percentage: ((Current - Min) * 100) / (Max - Min)
+P=$(( (VOLT - MIN) / 9 ))
+
+# Output the result
+echo "--- Galaxy S2 Battery Status ---"
+echo "Current Time: $(date +%H:%M:%S)"
+echo "Reported: $(cat $BATT_DIR/capacity)%"
+echo "Physical: $P% ($VOLT mV)"
+echo "Volt now: $(( $(cat $BATT_DIR/voltage_now) / 1000 ))"
+echo "Status: $(cat $CHG_DIR/status)"

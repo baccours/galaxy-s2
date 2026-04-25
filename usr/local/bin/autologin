@@ -1,0 +1,5 @@
+#!/bin/sh
+
+# used in /etc/inittab
+# to bypass the manual login prompt and autologin as user
+exec /bin/login -f user

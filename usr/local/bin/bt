@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Script added to /etc/doas.d/99-privilege_scripts.conf
+# If the Effective User ID is not 0 (root), re-run with doas
+if [ "$(id -u)" -ne 0 ];
+  then exec doas "$0" "$@"
+fi
+
+case "$1" in
+  off)
+    echo "Shutting down Bluetooth hardware..."
+    # 1. Block radio to be safe
+    rfkill block bluetooth 2>/dev/null
+    # 2. Remove the hardware transport and drivers
+    modprobe -ar hci_uart btbcm bluetooth 2>/dev/null
+    echo "Bluetooth is now OFF."
+    ;;
+  on)
+    echo "Initializing Bluetooth hardware..."
+    # 1. Load the transport (kernel handles dependencies)
+    modprobe hci_uart
+    # 2. Ensure it's not soft-blocked
+    rfkill unblock bluetooth
+    echo "Bluetooth is now ON."
+    ;;
+  status|st|is)
+    if lsmod | grep -qE "bt|hci|bluetooth" && \
+       rfkill  list bluetooth | grep -q "Soft blocked: no";
+    then
+      echo "Bluetooth is ON"
+    else
+      echo "Bluetooth is OFF"
+    fi
+    ;;
+  *)
+    echo "Usage: bt {on|off|status}"
+    exit 1
+    ;;
+esac

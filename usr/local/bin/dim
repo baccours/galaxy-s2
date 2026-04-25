@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# Script added to /etc/doas.d/99-privilege_scripts.conf
+# If the Effective User ID is not 0 (root), re-run with doas
+if [ "$(id -u)" -ne 0 ]; then
+    exec doas "$0" "$@"
+fi
+
+V=$1
+F="/sys/class/backlight/spi3.0/brightness"
+
+if [ -n "$V" ] && \
+   [ "$V" -eq "$V" ] 2>/dev/null && \
+   [ "$V" -ge 0 ] && \
+   [ "$V" -le 24 ]; then
+    echo "$V" > "$F"
+    echo "Dimming set to $V"
+    exit 0
+fi
+echo "Error: Provide a number between 0 and 24"
+exit 1
