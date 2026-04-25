@@ -313,21 +313,20 @@ int main(void)
      * termios flags on this persistent fd for the process lifetime.
      * Terminal starts in normal (cooked) mode; raw is entered only
      * when the menu opens and restored when it closes. */
-    log_info("started — MENU button opens/closes menu");
-
-    if (!terminal_open()) {
+if (!terminal_open()) {
         cleanup();
         return EXIT_FAILURE;
     }
 
-    /* Discard any events queued in the input devices before we start
-     * processing — prevents spurious keypresses from boot triggering
-     * FSM transitions immediately. */
+    /* Discard any key events queued before we started — e.g. the
+     * keypress used to launch the program sitting in the kernel buffer. */
     {
         struct input_event dummy;
         while (read(g_fd_gpio,     &dummy, sizeof(dummy)) > 0) {}
         while (read(g_fd_touchkey, &dummy, sizeof(dummy)) > 0) {}
     }
+
+    log_info("started — MENU button opens/closes menu");
 
     while (g_running) {
         int n = poll(pfds, 2, -1);
