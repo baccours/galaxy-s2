@@ -75,8 +75,8 @@ void th_close_menu(void)
     g_menu_just_closed = true;
     update_grabs();
     terminal_restore();
-    fputs(T_CLEAR T_SHOW, stdout);
-    fflush(stdout);
+    fputs(T_CLEAR T_SHOW, g_tty);
+    fflush(g_tty);
 }
 
 static void th_menu_back(void)
@@ -100,7 +100,7 @@ static void th_open_menu(void)
     g_state = STATE_MENU;
     update_grabs();
     terminal_raw();
-    fputs(T_HIDE, stdout);
+    fputs(T_HIDE, g_tty);
     render();
 }
 
@@ -241,8 +241,8 @@ static void cleanup(void)
 {
     /* 1. Restore terminal — terminal_close() is always safe to call. */
     terminal_close();
-    fputs(T_CLEAR T_RESET T_SHOW, stdout);
-    fflush(stdout);
+    fputs(T_CLEAR T_RESET T_SHOW, g_tty);
+    fflush(g_tty);
 
     /* 2. Release input grabs — device usable again immediately.
      * gpio and touchkey were grabbed at startup; always release them.
