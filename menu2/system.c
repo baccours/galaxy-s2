@@ -35,7 +35,6 @@ int  g_brightness = BRIGHTNESS_DEFAULT;
 int g_fd_gpio     = -1;
 int g_fd_touchkey = -1;
 int g_fd_touch    = -1;
-int g_fd_fbkbd    = -1;
 int g_fd_fb       = -1;
 
 /* ── Terminal ─────────────────────────────────────────────────────────────── */
@@ -116,19 +115,18 @@ int run_cmd(char *const argv[])
 void grab(int fd, bool on)
 {
     if (fd < 0) return;
-    if (ioctl(fd, EVIOCGRAB, on ? (void *)1 : (void *)0) < 0)
-        log_err("EVIOCGRAB");
+    if (ioctl(fd, EVIOCGRAB, on ? (void *)1 : (void *)0) < 0 && on)
+        log_err("EVIOCGRAB");   /* only log failures when grabbing, not releasing */
 }
 
 /*
- * Touchscreen: grabbed when menu open OR screen blank (disables touch input).
- * fbkeyboard device: grabbed when menu open (prevents stray chars).
+ * Touchscreen: grabbed when menu open OR screen blank.
+ * fbkeyboard is a virtual device layered on the touchscreen;
+ * grabbing the touchscreen implicitly disables it too.
  */
 void update_grabs(void)
 {
-    bool menu_on = (g_state == STATE_MENU);
-    grab(g_fd_touch, menu_on || g_screen_blank);
-    grab(g_fd_fbkbd, menu_on);
+    grab(g_fd_touch, g_state == STATE_MENU || g_screen_blank);
 }
 
 /* ── fbkeyboard OpenRC service ────────────────────────────────────────────── */
