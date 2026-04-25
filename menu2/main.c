@@ -66,6 +66,7 @@ void th_close_menu(void)
     g_sel   = 0;
     g_state = STATE_IDLE;
     update_grabs();
+    terminal_restore();                    /* give the terminal back to the user */
     fputs(T_SHOW, stdout);
     render();
 }
@@ -89,6 +90,7 @@ static void th_open_menu(void)
     g_sel   = 0;
     g_state = STATE_MENU;
     update_grabs();
+    terminal_raw();                        /* disable echo/canon while navigating */
     fputs(T_HIDE, stdout);
     render();
 }
@@ -224,10 +226,13 @@ static void drain(int fd)
 
 static void cleanup(void)
 {
-    /* 1. Restore terminal first — most critical for the user's session. */
-    terminal_restore();
-    fputs(T_CLEAR T_RESET T_SHOW, stdout);
-    fflush(stdout);
+    /* 1. Restore terminal first — most critical for the user's session.
+     *    Only emit ANSI resets if we were actually in raw mode; otherwise
+     *    the terminal was never touched and we leave it exactly as found. */
+    if (terminal_restore()) {
+        fputs(T_CLEAR T_RESET T_SHOW, stdout);
+        fflush(stdout);
+    }
 
     /* 2. Release input grabs — device usable again immediately. */
     grab(g_fd_gpio,     false);
@@ -293,10 +298,10 @@ int main(void)
 
     g_menu = &g_root_menu;
 
-    /* terminal_raw() only after all devices confirmed open */
-    terminal_raw();
-    fputs(T_CLEAR T_SHOW, stdout);
-    fflush(stdout);
+    /* Terminal stays in normal (cooked) mode at startup.
+     * terminal_raw() is called only when the menu opens (th_open_menu)
+     * and terminal_restore() is called when it closes (th_close_menu).
+     * This lets the user type normally in the terminal when the menu is off. */
     log_info("started — MENU button opens/closes menu");
 
     while (g_running) {
