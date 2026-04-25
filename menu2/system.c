@@ -38,39 +38,61 @@ int g_fd_touch    = -1;
 int g_fd_fb       = -1;
 
 /* ── Terminal ─────────────────────────────────────────────────────────────── */
+/*
+ * We open /dev/tty once at startup and keep it open for the process
+ * lifetime. raw/restore just toggle termios flags on the same fd.
+ * This avoids any race where close+reopen loses the saved state, and
+ * works correctly when stdout/stdin are redirected.
+ */
 static struct termios g_orig_termios;
 static bool           g_termios_saved = false;
-static int            g_tty_fd        = -1;   /* open once in terminal_raw() */
+static int            g_tty_fd        = -1;
+
+bool terminal_open(void)
+{
+    g_tty_fd = open("/dev/tty", O_RDWR | O_CLOEXEC);
+    if (g_tty_fd < 0) { log_err("open /dev/tty"); return false; }
+    if (tcgetattr(g_tty_fd, &g_orig_termios) != 0) {
+        log_err("tcgetattr"); close(g_tty_fd); g_tty_fd = -1; return false;
+    }
+    log_info("terminal_open ok, tty_fd=%d lflag=0x%x",
+             g_tty_fd, (unsigned)g_orig_termios.c_lflag);
+    return true;
+}
 
 void terminal_raw(void)
 {
-    if (g_termios_saved) return;              /* already raw */
-    /* Open the controlling terminal explicitly — works even when
-     * stdout/stdin are redirected (e.g. run from an init script). */
-    g_tty_fd = open("/dev/tty", O_RDWR | O_CLOEXEC);
-    if (g_tty_fd < 0) { log_err("open /dev/tty"); return; }
-    if (tcgetattr(g_tty_fd, &g_orig_termios) != 0) {
-        log_err("tcgetattr"); close(g_tty_fd); g_tty_fd = -1; return;
-    }
+    log_info("terminal_raw called: saved=%d tty_fd=%d", g_termios_saved, g_tty_fd);
+    if (g_termios_saved || g_tty_fd < 0) return;
     struct termios t = g_orig_termios;
     t.c_lflag &= (tcflag_t)~(ICANON | ECHO | ISIG);
     t.c_cc[VMIN]  = 1;
     t.c_cc[VTIME] = 0;
-    if (tcsetattr(g_tty_fd, TCSAFLUSH, &t) != 0)
-        log_err("tcsetattr raw");
-    else
+    if (tcsetattr(g_tty_fd, TCSAFLUSH, &t) == 0) {
         g_termios_saved = true;
+        log_info("terminal_raw ok");
+    } else {
+        log_err("tcsetattr raw");
+    }
 }
 
 bool terminal_restore(void)
 {
-    if (!g_termios_saved) return false;
-    if (tcsetattr(g_tty_fd, TCSAFLUSH, &g_orig_termios) != 0)
+    log_info("terminal_restore called: saved=%d tty_fd=%d", g_termios_saved, g_tty_fd);
+    if (!g_termios_saved || g_tty_fd < 0) return false;
+    if (tcsetattr(g_tty_fd, TCSAFLUSH, &g_orig_termios) == 0) {
+        g_termios_saved = false;
+        log_info("terminal_restore ok");
+    } else {
         log_err("tcsetattr restore");
-    close(g_tty_fd);
-    g_tty_fd        = -1;
-    g_termios_saved = false;
-    return true;
+    }
+    return !g_termios_saved;
+}
+
+void terminal_close(void)
+{
+    terminal_restore();
+    if (g_tty_fd >= 0) { close(g_tty_fd); g_tty_fd = -1; }
 }
 
 /* ── Logging ──────────────────────────────────────────────────────────────── */
