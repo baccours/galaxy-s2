@@ -50,10 +50,32 @@ static int            g_tty_fd        = -1;
 
 bool terminal_open(void)
 {
-    g_tty_fd = open("/dev/tty", O_RDWR | O_CLOEXEC);
-    if (g_tty_fd < 0) { log_err("open /dev/tty"); return false; }
+    /* Use stdin if it is a tty (normal interactive run).
+     * Fall back to opening the active console device directly —
+     * /dev/tty fails when the process has no controlling terminal
+     * (e.g. started via sudo with a redirected stdout). */
+    if (isatty(STDIN_FILENO)) {
+        g_tty_fd = STDIN_FILENO;
+    } else {
+        /* Find which tty the current process is on via /proc */
+        char ttydev[64] = "/dev/tty1";   /* safe default for pmOS fb console */
+        FILE *f = fopen("/sys/class/tty/tty0/active", "r");
+        if (f) {
+            char name[32];
+            if (fgets(name, sizeof(name), f)) {
+                name[strcspn(name, "\n")] = '\0';
+                snprintf(ttydev, sizeof(ttydev), "/dev/%s", name);
+            }
+            fclose(f);
+        }
+        g_tty_fd = open(ttydev, O_RDWR | O_CLOEXEC);
+        if (g_tty_fd < 0) { log_err("open %s", ttydev); return false; }
+    }
     if (tcgetattr(g_tty_fd, &g_orig_termios) != 0) {
-        log_err("tcgetattr"); close(g_tty_fd); g_tty_fd = -1; return false;
+        log_err("tcgetattr");
+        if (g_tty_fd != STDIN_FILENO) close(g_tty_fd);
+        g_tty_fd = -1;
+        return false;
     }
     log_info("terminal_open ok, tty_fd=%d lflag=0x%x",
              g_tty_fd, (unsigned)g_orig_termios.c_lflag);
@@ -92,7 +114,10 @@ bool terminal_restore(void)
 void terminal_close(void)
 {
     terminal_restore();
-    if (g_tty_fd >= 0) { close(g_tty_fd); g_tty_fd = -1; }
+    if (g_tty_fd >= 0 && g_tty_fd != STDIN_FILENO) {
+        close(g_tty_fd);
+    }
+    g_tty_fd = -1;
 }
 
 /* ── Logging ──────────────────────────────────────────────────────────────── */
