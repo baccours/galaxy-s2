@@ -124,18 +124,20 @@ void terminal_close(void)
 void log_info(const char *fmt, ...)
 {
     va_list ap; va_start(ap, fmt);
-    fputs("[menu] ", stderr);
-    vfprintf(stderr, fmt, ap);
-    fputc('\n', stderr);
+    fputs("[menu] ", stdout);
+    vfprintf(stdout, fmt, ap);
+    fputc('\n', stdout);
+    fflush(stdout);
     va_end(ap);
 }
 
 void log_err(const char *fmt, ...)
 {
     va_list ap; va_start(ap, fmt);
-    fprintf(stderr, "[menu] ERROR: ");
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, ": %s\n", strerror(errno));
+    fprintf(stdout, "[menu] ERROR: ");
+    vfprintf(stdout, fmt, ap);
+    fprintf(stdout, ": %s\n", strerror(errno));
+    fflush(stdout);
     va_end(ap);
 }
 
