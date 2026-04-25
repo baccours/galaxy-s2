@@ -7,9 +7,10 @@
 #define MAIN_H
 
 #define _GNU_SOURCE
+#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <signal.h>
+#include <stdio.h>
 
 /* ── Device paths ─────────────────────────────────────────────────────────── */
 #define DEV_GPIO        "/dev/input/event0"
@@ -97,7 +98,8 @@ extern int         g_brightness;
 extern int g_fd_gpio;
 extern int g_fd_touchkey;
 extern int g_fd_touch;
-extern int g_fd_fb;
+extern int   g_fd_fb;
+extern FILE *g_tty;    /* /dev/tty1 — all display output goes here */
 
 /* ── Menu root (defined in menu.c) ───────────────────────────────────────── */
 extern const Menu g_root_menu;
