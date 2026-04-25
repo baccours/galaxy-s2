@@ -40,24 +40,36 @@ int g_fd_fb       = -1;
 /* ── Terminal ─────────────────────────────────────────────────────────────── */
 static struct termios g_orig_termios;
 static bool           g_termios_saved = false;
+static int            g_tty_fd        = -1;   /* open once in terminal_raw() */
 
 void terminal_raw(void)
 {
-    struct termios t;
-    if (tcgetattr(STDOUT_FILENO, &t) != 0) return;
-    g_orig_termios  = t;
-    g_termios_saved = true;
+    if (g_termios_saved) return;              /* already raw */
+    /* Open the controlling terminal explicitly — works even when
+     * stdout/stdin are redirected (e.g. run from an init script). */
+    g_tty_fd = open("/dev/tty", O_RDWR | O_CLOEXEC);
+    if (g_tty_fd < 0) { log_err("open /dev/tty"); return; }
+    if (tcgetattr(g_tty_fd, &g_orig_termios) != 0) {
+        log_err("tcgetattr"); close(g_tty_fd); g_tty_fd = -1; return;
+    }
+    struct termios t = g_orig_termios;
     t.c_lflag &= (tcflag_t)~(ICANON | ECHO | ISIG);
     t.c_cc[VMIN]  = 1;
     t.c_cc[VTIME] = 0;
-    tcsetattr(STDOUT_FILENO, TCSAFLUSH, &t);
+    if (tcsetattr(g_tty_fd, TCSAFLUSH, &t) != 0)
+        log_err("tcsetattr raw");
+    else
+        g_termios_saved = true;
 }
 
 bool terminal_restore(void)
 {
     if (!g_termios_saved) return false;
-    tcsetattr(STDOUT_FILENO, TCSAFLUSH, &g_orig_termios);
-    g_termios_saved = false;   /* allow re-entry after next terminal_raw() */
+    if (tcsetattr(g_tty_fd, TCSAFLUSH, &g_orig_termios) != 0)
+        log_err("tcsetattr restore");
+    close(g_tty_fd);
+    g_tty_fd        = -1;
+    g_termios_saved = false;
     return true;
 }
 
@@ -120,8 +132,10 @@ static bool g_touch_grabbed = false;
 void grab(int fd, bool on)
 {
     if (fd < 0) return;
-    if (ioctl(fd, EVIOCGRAB, on ? (void *)1 : (void *)0) < 0)
-        log_err("EVIOCGRAB %s", on ? "grab" : "release");
+    /* Only log errors when grabbing — releasing a non-grabbed fd
+     * returns EINVAL which is harmless and expected (e.g. in cleanup). */
+    if (ioctl(fd, EVIOCGRAB, on ? (void *)1 : (void *)0) < 0 && on)
+        log_err("EVIOCGRAB");
 }
 
 /*
