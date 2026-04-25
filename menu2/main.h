@@ -110,8 +110,10 @@ extern Menu       g_pwr_menu;
 void log_info(const char *fmt, ...);
 void log_err (const char *fmt, ...);
 
+bool terminal_open   (void);   /* call once at startup */
 void terminal_raw    (void);
 bool terminal_restore(void);
+void terminal_close  (void);   /* call once at shutdown */
 
 void fb_set_blank       (bool blank);
 int  brightness_read    (void);
