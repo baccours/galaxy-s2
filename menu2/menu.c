@@ -136,27 +136,27 @@ static void render_menu(void)
     for (const Menu *m = g_menu; m && depth < 16; m = m->parent)
         path[depth++] = m;
 
-    fputs(T_BOLD T_CYAN, stdout);
+    fputs(T_BOLD T_CYAN, g_tty);
 
     /* Top border */
-    fputs("+", stdout);
-    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
-    fputs("+\r\n", stdout);
+    fputs("+", g_tty);
+    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
+    fputs("+\r\n", g_tty);
 
     /* Breadcrumb row */
-    fputs("| " T_YELLOW, stdout);
+    fputs("| " T_YELLOW, g_tty);
     int used = 0;
     for (int i = depth - 1; i >= 0; i--) {
-        int n = fprintf(stdout, "%s%s", path[i]->title, i > 0 ? " > " : "");
+        int n = fprintf(g_tty, "%s%s", path[i]->title, i > 0 ? " > " : "");
         if (n > 0) used += n;
     }
-    for (int i = used; i < BOX_W - 2; i++) fputc(' ', stdout);
-    fputs(T_CYAN " |\r\n", stdout);
+    for (int i = used; i < BOX_W - 2; i++) fputc(' ', g_tty);
+    fputs(T_CYAN " |\r\n", g_tty);
 
     /* Separator */
-    fputs("+", stdout);
-    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
-    fputs("+\r\n", stdout);
+    fputs("+", g_tty);
+    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
+    fputs("+\r\n", g_tty);
 
     /* Items */
     for (uint8_t i = 0; i < g_menu->count; i++) {
@@ -175,74 +175,74 @@ static void render_menu(void)
             snprintf(badge_buf, sizeof(badge_buf), "%-3s", badge);
 
         if (sel)
-            printf("| " T_REV T_BOLD "%-*s%s%s" T_RESET T_CYAN " |\r\n",
+            fprintf(g_tty, "| " T_REV T_BOLD "%-*s%s%s" T_RESET T_CYAN " |\r\n",
                    BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
         else
-            printf("| " T_RESET "%-*s%s%s" T_CYAN " |\r\n",
+            fprintf(g_tty, "| " T_RESET "%-*s%s%s" T_CYAN " |\r\n",
                    BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
     }
 
     /* Bottom border */
-    fputs(T_CYAN "+", stdout);
-    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
-    fputs("+\r\n", stdout);
+    fputs(T_CYAN "+", g_tty);
+    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
+    fputs("+\r\n", g_tty);
 
     fputs(T_DIM "VOL+/-: navigate   PWR: select   BACK: back\r\n"
-          T_RESET, stdout);
+          T_RESET, g_tty);
 }
 
 static void render_brightness(void)
 {
-    fputs(T_BOLD T_CYAN, stdout);
+    fputs(T_BOLD T_CYAN, g_tty);
 
     /* Box top */
-    fputs("+", stdout);
-    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
-    fputs("+\r\n", stdout);
+    fputs("+", g_tty);
+    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
+    fputs("+\r\n", g_tty);
 
     /* Title */
-    fputs("| " T_YELLOW, stdout);
-    int tlen = fprintf(stdout, "Brightness");
-    for (int i = tlen; i < BOX_W - 2; i++) fputc(' ', stdout);
-    fputs(T_CYAN " |\r\n", stdout);
+    fputs("| " T_YELLOW, g_tty);
+    int tlen = fprintf(g_tty, "Brightness");
+    for (int i = tlen; i < BOX_W - 2; i++) fputc(' ', g_tty);
+    fputs(T_CYAN " |\r\n", g_tty);
 
     /* Separator */
-    fputs("+", stdout);
-    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
-    fputs("+\r\n", stdout);
+    fputs("+", g_tty);
+    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
+    fputs("+\r\n", g_tty);
 
     /* Level fraction */
-    printf("| " T_RESET " %2d / %-2d " T_CYAN, g_brightness, BRIGHTNESS_MAX);
+    fprintf(g_tty, "| " T_RESET " %2d / %-2d " T_CYAN, g_brightness, BRIGHTNESS_MAX);
 
     /* Bar: filled portion in bold white, empty in dim */
-    fputs(T_BOLD "[", stdout);
+    fputs(T_BOLD "[", g_tty);
     for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
-        if (i == g_brightness) fputs(T_DIM, stdout);
-        fputc(i < g_brightness ? '#' : '-', stdout);
+        if (i == g_brightness) fputs(T_DIM, g_tty);
+        fputc(i < g_brightness ? '#' : '-', g_tty);
     }
-    fputs(T_RESET T_CYAN "]", stdout);
+    fputs(T_RESET T_CYAN "]", g_tty);
 
     /* Pad remainder of the row */
     /* bar occupies: 1 "[" + (BRIGHTNESS_MAX+1) chars + 1 "]" = 27 chars
      * prefix "| " + " %2d / %-2d " = 11 chars  → total = 38; clip to box */
-    fputs(" |\r\n", stdout);
+    fputs(" |\r\n", g_tty);
 
     /* Box bottom */
-    fputs(T_CYAN "+", stdout);
-    for (int i = 0; i < BOX_W; i++) fputc('-', stdout);
-    fputs("+\r\n", stdout);
+    fputs(T_CYAN "+", g_tty);
+    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
+    fputs("+\r\n", g_tty);
 
-    fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, stdout);
+    fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, g_tty);
 }
 
 /* Unified render — always clears, then delegates on g_state */
 void render(void)
 {
-    fputs(T_CLEAR, stdout);
+    fputs(T_CLEAR, g_tty);
     switch (g_state) {
         case STATE_MENU:       render_menu();       break;
         case STATE_BRIGHTNESS: render_brightness(); break;
         default:                                    break;
     }
-    fflush(stdout);
+    fflush(g_tty);
 }
