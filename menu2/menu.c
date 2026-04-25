@@ -49,9 +49,6 @@ static const char *rfkill_status(const char *type)
 static const char *status_wifi(void)      { return rfkill_status("wlan");      }
 static const char *status_bt  (void)      { return rfkill_status("bluetooth"); }
 
-/* ── Forward declaration (body in main.c, visible via main.h) ───────────── */
-/* th_close_menu declared in main.h */
-
 /* ═══════════════════════════════════════════════════════════════════════════
  * Leaf action callbacks
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -88,11 +85,8 @@ static void action_poweroff(void)
     run_cmd(a);
 }
 
-/* action_brightness — enters brightness overlay via FSM */
 static void action_brightness(void) { th_brightness_enter(); }
 
-/* Delegates to th_close_menu (FSM handler) so the state transition is
- * always driven through the FSM, not duplicated here. */
 static void action_exit_menu(void) { th_close_menu(); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -164,11 +158,6 @@ static void render_menu(void)
         bool        has_sub = (g_menu->items[i].submenu != NULL);
         const char *badge  = g_menu->items[i].status
                              ? g_menu->items[i].status() : NULL;
-        /*
-         * Layout: "| " + label + padding + badge/arrow + " |"
-         * badge replaces the submenu arrow when present.
-         * badge is right-aligned; label is left-aligned within the remainder.
-         */
         const char *arrow  = has_sub ? ">" : " ";
         char        badge_buf[8] = "  ";   /* two spaces when no badge */
         if (badge)
@@ -222,9 +211,6 @@ static void render_brightness(void)
     }
     fputs(T_RESET T_CYAN "]", g_tty);
 
-    /* Pad remainder of the row */
-    /* bar occupies: 1 "[" + (BRIGHTNESS_MAX+1) chars + 1 "]" = 27 chars
-     * prefix "| " + " %2d / %-2d " = 11 chars  → total = 38; clip to box */
     fputs(" |\r\n", g_tty);
 
     /* Box bottom */
