@@ -66,9 +66,11 @@ void th_close_menu(void)
     g_sel   = 0;
     g_state = STATE_IDLE;
     update_grabs();
-    terminal_restore();                    /* give the terminal back to the user */
-    fputs(T_SHOW, stdout);
-    render();
+    terminal_restore();
+    fputs(T_CLEAR T_SHOW, stdout);
+    fflush(stdout);
+    /* render() intentionally not called here: screen is clear,
+     * terminal is cooked, cursor is visible — nothing more to draw. */
 }
 
 static void th_menu_back(void)
