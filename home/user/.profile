@@ -4,6 +4,6 @@ PATH="$PATH:$HOME/.local/bin"
 if [ -z "$TMUX" ] && \
    [ "$TERM" != "screen" ] && \
    [ "$(tty)" = "/dev/tty1" ]; then
-    tmux attach-session -t 0 || \
-    tmux new-session -s 0
+    tmux -2 attach-session -t 0 || \
+    tmux -2 new-session -s 0
 fi
