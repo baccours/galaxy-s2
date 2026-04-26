@@ -12,5 +12,5 @@
   echo 0 > /sys/class/backlight/spi3.0/brightness
 
   # Turn off bluetooth
-  bt off
+  bluetooth-toggle off
 ) &
