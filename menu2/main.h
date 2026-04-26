@@ -52,15 +52,6 @@ typedef enum {
     STATE_ANY,        /* wildcard — matches any state in table */
 } AppState;
 
-typedef enum {
-    EVT_VOL_UP,
-    EVT_VOL_DOWN,
-    EVT_POWER,
-    EVT_MENU_KEY,
-    EVT_BACK_KEY,
-    EVT_HOME_KEY,
-} FsmEvent;
-
 /* ── Menu types ───────────────────────────────────────────────────────────── */
 typedef struct Menu Menu;
 typedef void        (*ActionFn)(void);
