@@ -41,8 +41,6 @@ static void th_menu_select(void)
         render();
     } else if (item->action) {
         item->action();
-        /* action may have changed g_state (e.g. th_close_menu);
-         * only re-render if still in a menu state. */
         if (g_state == STATE_MENU || g_state == STATE_BRIGHTNESS)
             render();
     }
@@ -120,64 +118,36 @@ static void th_brightness_exit(void)
 }
 
 /* ── FSM declarative transition table ────────────────────────────────────────
- * { state, event, handler } — STATE_ANY matches any state.
+ * { state, key_code, handler } — STATE_ANY matches any state.
  * First match wins: specific states must appear before STATE_ANY rows.
  */
 typedef void (*TransitionFn)(void);
 
 typedef struct {
     AppState     state;
-    FsmEvent     event;
+    unsigned int key_code;
     TransitionFn handler;
 } Transition;
 
 static const Transition TRANSITIONS[] = {
-    { STATE_MENU,       EVT_VOL_UP,    th_menu_up         },
-    { STATE_MENU,       EVT_VOL_DOWN,  th_menu_down       },
-    { STATE_MENU,       EVT_POWER,     th_menu_select     },
-    { STATE_MENU,       EVT_BACK_KEY,  th_menu_back       },
-    { STATE_MENU,       EVT_MENU_KEY,  th_close_menu      },
+    { STATE_MENU,       KEY_VOLUMEUP_CODE,   th_menu_up         },
+    { STATE_MENU,       KEY_VOLUMEDOWN_CODE, th_menu_down       },
+    { STATE_MENU,       KEY_POWER_CODE,      th_menu_select     },
+    { STATE_MENU,       KEY_BACK_CODE,       th_menu_back       },
+    { STATE_MENU,       KEY_MENU_CODE,       th_close_menu      },
 
-    { STATE_BRIGHTNESS, EVT_VOL_UP,    th_brightness_up   },
-    { STATE_BRIGHTNESS, EVT_VOL_DOWN,  th_brightness_down },
-    { STATE_BRIGHTNESS, EVT_POWER,     th_brightness_exit },
-    { STATE_BRIGHTNESS, EVT_BACK_KEY,  th_brightness_exit },
+    { STATE_BRIGHTNESS, KEY_VOLUMEUP_CODE,   th_brightness_up   },
+    { STATE_BRIGHTNESS, KEY_VOLUMEDOWN_CODE, th_brightness_down },
+    { STATE_BRIGHTNESS, KEY_POWER_CODE,      th_brightness_exit },
+    { STATE_BRIGHTNESS, KEY_BACK_CODE,       th_brightness_exit },
 
-    { STATE_IDLE,       EVT_POWER,     th_idle_power      },
+    { STATE_IDLE,       KEY_POWER_CODE,      th_idle_power      },
 
-    { STATE_ANY,        EVT_MENU_KEY,  th_open_menu       },
-    { STATE_ANY,        EVT_HOME_KEY,  th_home            },
-    { STATE_ANY,        EVT_POWER,     th_idle_power      },  /* unblank */
+    { STATE_ANY,        KEY_MENU_CODE,       th_open_menu       },
+    { STATE_ANY,        KEY_HOME_CODE,       th_home            },
+    { STATE_ANY,        KEY_POWER_CODE,      th_idle_power      },  /* unblank */
 };
 #define TRANSITION_COUNT (sizeof(TRANSITIONS) / sizeof(TRANSITIONS[0]))
-
-static void fsm_dispatch(FsmEvent evt)
-{
-    for (size_t i = 0; i < TRANSITION_COUNT; i++) {
-        const Transition *t = &TRANSITIONS[i];
-        if ((t->state == STATE_ANY || t->state == g_state) && t->event == evt) {
-            t->handler();
-            return;
-        }
-    }
-}
-
-/* ── Input event → FSM event translation ─────────────────────────────────── */
-
-static void process_ev(const struct input_event *ev)
-{
-    if (ev->type != EV_KEY || ev->value != 1) return;   /* key-down only */
-
-    switch (ev->code) {
-        case KEY_VOLUMEUP_CODE:   fsm_dispatch(EVT_VOL_UP);   break;
-        case KEY_VOLUMEDOWN_CODE: fsm_dispatch(EVT_VOL_DOWN); break;
-        case KEY_POWER_CODE:      fsm_dispatch(EVT_POWER);    break;
-        case KEY_HOME_CODE:       fsm_dispatch(EVT_HOME_KEY); break;
-        case KEY_MENU_CODE:       fsm_dispatch(EVT_MENU_KEY); break;
-        case KEY_BACK_CODE:       fsm_dispatch(EVT_BACK_KEY); break;
-        default: break;
-    }
-}
 
 static void drain(int fd)
 {
@@ -185,8 +155,18 @@ static void drain(int fd)
     ssize_t n;
     while ((n = read(fd, buf, sizeof(buf))) > 0) {
         int cnt = (int)(n / (ssize_t)sizeof(struct input_event));
-        for (int i = 0; i < cnt; i++)
-            process_ev(&buf[i]);
+        for (int i = 0; i < cnt; i++) {
+            const struct input_event *ev = &buf[i];
+            if (ev->type != EV_KEY || ev->value != 1) continue;
+            for (size_t j = 0; j < TRANSITION_COUNT; j++) {
+                const Transition *t = &TRANSITIONS[j];
+                if (t->key_code == ev->code &&
+                    (t->state == STATE_ANY || t->state == g_state)) {
+                    t->handler();
+                    break;
+                }
+            }
+        }
     }
     if (n < 0 && errno != EAGAIN && errno != EINTR)
         log_err("read event");
@@ -232,7 +212,6 @@ int main(void)
     sigaction(SIGHUP,  &sa, NULL);
     sigaction(SIGCHLD, &(struct sigaction){ .sa_handler = SIG_DFL }, NULL);
 
-    /* Parent pointers cannot be set in static initialisers */
     g_net_menu.parent = &g_root_menu;
     g_pwr_menu.parent = &g_root_menu;
 
@@ -252,7 +231,7 @@ int main(void)
         return EXIT_FAILURE;
     }
 
-    /* Discard events queued before startup (e.g. the keypress that launched us) */
+    /* Discard events queued before startup */
     {
         struct input_event dummy;
         while (read(g_fd_gpio,     &dummy, sizeof(dummy)) > 0) {}
