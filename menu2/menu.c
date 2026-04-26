@@ -203,7 +203,7 @@ static void render_brightness(void)
     /* Level fraction */
     fprintf(g_tty, "| " T_RESET " %2d / %-2d " T_CYAN, g_brightness, BRIGHTNESS_MAX);
 
-    /* Bar: filled portion in bold white, empty in dim */
+    /* Bar: filled in bold, empty in dim; padded to fill box width */
     fputs(T_BOLD "[", g_tty);
     for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
         if (i == g_brightness) fputs(T_DIM, g_tty);
@@ -211,6 +211,8 @@ static void render_brightness(void)
     }
     fputs(T_RESET T_CYAN "]", g_tty);
 
+    /* Pad remaining space: BOX_W - 2 (borders) - 10 (level) - 27 (bar) */
+    for (int i = 0; i < BOX_W - 39; i++) fputc(' ', g_tty);
     fputs(" |\r\n", g_tty);
 
     /* Box bottom */
