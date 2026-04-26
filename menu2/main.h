@@ -42,7 +42,7 @@
 #define T_HIDE   "\033[?25l"
 #define T_SHOW   "\033[?25h"
 
-#define BOX_W 30   /* printable width of the menu box interior */
+#define BOX_W 50   /* printable width of the menu box interior */
 
 /* ── FSM states & events ─────────────────────────────────────────────────── */
 typedef enum {
