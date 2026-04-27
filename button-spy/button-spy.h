@@ -12,6 +12,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+/* ── utils ────────────────────────────────────────────────────────────────── */
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 /* ── Device paths ─────────────────────────────────────────────────────────── */
 #define DEV_GPIO        "/dev/input/event0"
 #define DEV_TOUCHKEY    "/dev/input/event1"
