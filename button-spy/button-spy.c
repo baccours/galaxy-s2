@@ -1,12 +1,12 @@
 /*
- * main.c — FSM transition table, transition handlers, input translation,
+ * button-spy.c — FSM transition table, transition handlers, input translation,
  *           cleanup, and main().
  *
  * Build:
- *   gcc -O2 -Wall -Wextra -std=c11 -o menu main.c menu.c system.c
+ *   gcc -O2 -Wall -Wextra -std=c11 -o button-spy button-spy.c menu.c system.c
  */
 
-#include "main.h"
+#include "button-spy.h"
 
 #include <errno.h>
 #include <fcntl.h>
