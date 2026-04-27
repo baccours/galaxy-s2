@@ -1,10 +1,10 @@
 /*
- * main.h — shared types, constants, and cross-file declarations
+ * button-spy.h — shared types, constants, and cross-file declarations
  *
  * postmarketOS hardware-button menu — Samsung Galaxy S2 GT-I9100
  */
-#ifndef MAIN_H
-#define MAIN_H
+#ifndef BTNSPY_H
+#define BTNSPY_H
 
 #define _GNU_SOURCE
 #include <signal.h>
@@ -119,4 +119,4 @@ void net_invalidate(void);  /* mark network status cache stale */
 void th_close_menu      (void);
 void th_brightness_enter(void);
 
-#endif /* MAIN_H */
+#endif /* BTNSPY_H */
