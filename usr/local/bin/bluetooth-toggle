@@ -28,8 +28,10 @@ case "$1" in
        rfkill  list bluetooth | grep -q "Soft blocked: no";
     then
       echo "Bluetooth is ON"
+      exit 0
     else
       echo "Bluetooth is OFF"
+      exit 1
     fi
     ;;
   *)
