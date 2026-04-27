@@ -75,7 +75,11 @@ static void action_brightness(void) { th_brightness_enter(); }
 static void action_exit_menu(void)  { th_close_menu(); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Menu tree — edit only these tables to extend the menu
+ * Menu tree
+ *
+ * Edit only these tables to add/remove/reorder entries.
+ * Parent pointers are set at runtime in main() — C static initialisers
+ * cannot forward-reference an object defined later in the same TU.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static MenuItem g_net_items[] = {
@@ -91,49 +95,58 @@ static MenuItem g_pwr_items[] = {
 Menu g_pwr_menu = { "Power", g_pwr_items, 2, NULL };
 
 static MenuItem g_root_items[] = {
-    { "Networking", NULL, &g_net_menu, NULL },
-    { "Power",      NULL, &g_pwr_menu, NULL },
-    { "Brightness", action_brightness, NULL, NULL },
-    { "Exit Menu",  action_exit_menu,  NULL, NULL },
+    { "Networking",  NULL,              &g_net_menu, NULL },
+    { "Power",       NULL,              &g_pwr_menu, NULL },
+    { "Brightness",  action_brightness, NULL,        NULL },
+    { "Exit Menu",   action_exit_menu,  NULL,        NULL },
 };
 const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, 4, NULL };
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Rendering
+ * Rendering — single entry point
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static void render_menu(void)
 {
-    /* Breadcrumb: walk from current node to root, then print root-first */
+    /* Breadcrumb: walk from current node to root via parent pointers,
+     * collect the path, then print root-first. */
     const Menu *path[16];
     int depth = 0;
     for (const Menu *m = g_menu; m && depth < 16; m = m->parent)
         path[depth++] = m;
 
     fputs(T_BOLD T_CYAN, g_tty);
+
+    /* Top border */
     fputs("+", g_tty);
     for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
     fputs("+\r\n", g_tty);
 
+    /* Breadcrumb row */
     fputs("| " T_YELLOW, g_tty);
     int used = 0;
-    for (int i = depth - 1; i >= 0; i--)
-        used += fprintf(g_tty, "%s%s", path[i]->title, i > 0 ? " > " : "");
+    for (int i = depth - 1; i >= 0; i--) {
+        int n = fprintf(g_tty, "%s%s", path[i]->title, i > 0 ? " > " : "");
+        if (n > 0) used += n;
+    }
     for (int i = used; i < BOX_W - 2; i++) fputc(' ', g_tty);
     fputs(T_CYAN " |\r\n", g_tty);
 
+    /* Separator */
     fputs("+", g_tty);
     for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
     fputs("+\r\n", g_tty);
 
+    /* Items */
     for (uint8_t i = 0; i < g_menu->count; i++) {
         bool        sel     = (i == g_sel);
         bool        has_sub = (g_menu->items[i].submenu != NULL);
         const char *badge   = g_menu->items[i].status
                               ? g_menu->items[i].status() : NULL;
         const char *arrow   = has_sub ? ">" : " ";
-        char        badge_buf[8] = "   ";
-        if (badge) snprintf(badge_buf, sizeof(badge_buf), "%-3s", badge);
+        char        badge_buf[8] = "  ";   /* two spaces when no badge */
+        if (badge)
+            snprintf(badge_buf, sizeof(badge_buf), "%-3s", badge);
 
         if (sel)
             fprintf(g_tty, "| " T_REV T_BOLD "%-*s%s%s" T_RESET T_CYAN " |\r\n",
@@ -143,44 +156,58 @@ static void render_menu(void)
                     BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
     }
 
+    /* Bottom border */
     fputs(T_CYAN "+", g_tty);
     for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
     fputs("+\r\n", g_tty);
+
     fputs(T_DIM "VOL+/-: navigate   PWR: select   BACK: back\r\n" T_RESET, g_tty);
 }
 
 static void render_brightness(void)
 {
     fputs(T_BOLD T_CYAN, g_tty);
+
+    /* Box top */
     fputs("+", g_tty);
     for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
     fputs("+\r\n", g_tty);
 
+    /* Title */
     fputs("| " T_YELLOW, g_tty);
     int tlen = fprintf(g_tty, "Brightness");
     for (int i = tlen; i < BOX_W - 2; i++) fputc(' ', g_tty);
     fputs(T_CYAN " |\r\n", g_tty);
 
+    /* Separator */
     fputs("+", g_tty);
     for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
     fputs("+\r\n", g_tty);
 
+    /* Level fraction */
     fprintf(g_tty, "| " T_RESET " %2d / %-2d " T_CYAN, g_brightness, BRIGHTNESS_MAX);
+
+    /* Bar: filled in bold, empty in dim; padded to fill box width */
     fputs(T_BOLD "[", g_tty);
     for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
         if (i == g_brightness) fputs(T_DIM, g_tty);
         fputc(i < g_brightness ? '#' : '-', g_tty);
     }
     fputs(T_RESET T_CYAN "]", g_tty);
+
+    /* Pad remaining space: BOX_W - 2 (borders) - 10 (level) - 27 (bar) */
     for (int i = 0; i < BOX_W - 39; i++) fputc(' ', g_tty);
     fputs(" |\r\n", g_tty);
 
+    /* Box bottom */
     fputs(T_CYAN "+", g_tty);
     for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
     fputs("+\r\n", g_tty);
+
     fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, g_tty);
 }
 
+/* Unified render — always clears, then delegates on g_state */
 void render(void)
 {
     fputs(T_CLEAR, g_tty);
