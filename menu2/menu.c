@@ -14,9 +14,6 @@
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Networking status cache
- *
- * Populated once via net_query_status() when entering the Networking submenu.
- * Updated locally after each toggle — no re-query needed.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static bool g_wifi_on    = false;
