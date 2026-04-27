@@ -17,7 +17,7 @@ $(TARGET): $(OBJS)
 install: $(TARGET)
 	install -Dm755 $(TARGET) /usr/local/bin/$(TARGET)
 	strip --strip-all /usr/local/bin/$(TARGET)
-	install -Dm644 button-spy.openrc /etc/init.d/button-spy
+	install -Dm644 button-spy_openrc /etc/init.d/button-spy
 	rc-update add button-spy default
 
 clean:
