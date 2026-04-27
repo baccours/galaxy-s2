@@ -149,7 +149,7 @@ static const Transition TRANSITIONS[] = {
     { STATE_ANY,        KEY_HOME_CODE,       th_home            },
     { STATE_ANY,        KEY_POWER_CODE,      th_idle_power      },  /* unblank */
 };
-#define TRANSITION_COUNT (sizeof(TRANSITIONS) / sizeof(TRANSITIONS[0]))
+#define TRANSITION_COUNT ARRAY_SIZE(TRANSITIONS)
 
 static void drain(int fd)
 {
