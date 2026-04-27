@@ -1,4 +1,4 @@
-# pmenu — postmarketOS hardware-button menu
+# button-spy — postmarketOS hardware-button menu
 ## Samsung Galaxy S2 GT-I9100
 
 A lightweight (~300 LOC), dependency-free C program that turns the
@@ -76,29 +76,29 @@ physical buttons into a full navigation system for a headless pmOS install.
 
 ```sh
 # On the device (or cross-compile)
-gcc -O2 -Wall -o pmenu pmenu.c
+gcc -O2 -Wall -o button-spy button-spy.c
 
 # Install manually
-cp pmenu /usr/local/bin/
-chmod 755 /usr/local/bin/pmenu
+cp button-spy /usr/local/bin/
+chmod 755 /usr/local/bin/button-spy
 
 # Install as OpenRC service
-cp pmenu.openrc /etc/init.d/pmenu
-chmod 755 /etc/init.d/pmenu
-rc-update add pmenu default
-rc-service pmenu start
+cp button-spy.openrc /etc/init.d/button-spy
+chmod 755 /etc/init.d/button-spy
+rc-update add button-spy default
+rc-service button-spy start
 ```
 
 **Cross-compile example (from x86 host):**
 ```sh
-arm-linux-musleabihf-gcc -O2 -Wall -static -o pmenu pmenu.c
+arm-linux-musleabihf-gcc -O2 -Wall -static -o button-spy button-spy.c
 ```
 
 ---
 
 ### Extending the menu
 
-Add entries by editing the static `MenuItem` arrays in `pmenu.c`:
+Add entries by editing the static `MenuItem` arrays in `menu.c`:
 
 ```c
 /* Leaf action */
