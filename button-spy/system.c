@@ -5,7 +5,7 @@
  * Nothing here knows about menus or the FSM.
  */
 
-#include "main.h"
+#include "button-spy.h"
 
 #include <errno.h>
 #include <fcntl.h>
