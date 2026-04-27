@@ -1,13 +1,13 @@
 #!/sbin/openrc-run
 # OpenRC service for menu — hardware-button menu on GT-I9100
 
-name="menu"
+name="button-spy"
 description="postmarketOS hardware-button menu"
-command="/usr/local/bin/menu"
+command="/usr/local/bin/button-spy"
 command_background=true
-pidfile="/run/menu.pid"
-output_log="/var/log/menu.log"
-error_log="/var/log/menu.log"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/button-spy.log"
+error_log="/var/log/button-spy.log"
 
 # Run on tty1 so ANSI output goes to the framebuffer console
 # Requires the console to be on /dev/tty1 (default pmOS setup)
