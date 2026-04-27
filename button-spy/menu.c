@@ -5,7 +5,7 @@
  * items[] array. No other file needs to change.
  */
 
-#include "main.h"
+#include "button-spy.h"
 
 #include <stddef.h>
 #include <stdio.h>
