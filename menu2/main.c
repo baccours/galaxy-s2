@@ -3,7 +3,7 @@
  *           cleanup, and main().
  *
  * Build:
- *   gcc -Os -Wall -Wextra -std=c11 -o menu main.c menu.c system.c
+ *   gcc -O2 -Wall -Wextra -std=c11 -o menu main.c menu.c system.c
  */
 
 #include "main.h"
@@ -38,6 +38,7 @@ static void th_menu_select(void)
     if (item->submenu) {
         g_menu = item->submenu;
         g_sel  = 0;
+        net_invalidate();
         render();
     } else if (item->action) {
         item->action();
@@ -62,6 +63,7 @@ static void th_menu_back(void)
     if (g_menu->parent) {
         g_menu = g_menu->parent;
         g_sel  = 0;
+        net_invalidate();
         render();
     } else {
         th_close_menu();
