@@ -83,13 +83,13 @@ static MenuItem g_net_items[] = {
     { "Toggle WiFi",      action_wifi_toggle, NULL, status_wifi },
     { "Toggle Bluetooth", action_bt_toggle,   NULL, status_bt   },
 };
-Menu g_net_menu = { "Networking", g_net_items, 2, NULL };
+Menu g_net_menu = { "Networking", g_net_items, ARRAY_SIZE(g_net_items), NULL };
 
 static MenuItem g_pwr_items[] = {
     { "Reboot",    action_reboot,   NULL, NULL },
     { "Power Off", action_poweroff, NULL, NULL },
 };
-Menu g_pwr_menu = { "Power", g_pwr_items, 2, NULL };
+Menu g_pwr_menu = { "Power", g_pwr_items, ARRAY_SIZE(g_pwr_items), NULL };
 
 static MenuItem g_root_items[] = {
     { "Networking",  NULL,              &g_net_menu, NULL },
@@ -97,7 +97,7 @@ static MenuItem g_root_items[] = {
     { "Brightness",  action_brightness, NULL,        NULL },
     { "Exit Menu",   action_exit_menu,  NULL,        NULL },
 };
-const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, 4, NULL };
+const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_items), NULL };
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Rendering — single entry point
