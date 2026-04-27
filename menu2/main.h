@@ -16,7 +16,8 @@
 #define DEV_GPIO        "/dev/input/event0"
 #define DEV_TOUCHKEY    "/dev/input/event1"
 #define DEV_TOUCH       "/dev/input/event2"
-#define DEV_TTY         "/dev/tty1"
+#define DEV_TTY              "/dev/tty1"
+#define BT_TOGGLE_SCRIPT     "/usr/local/bin/bluetooth-toggle"
 #define FB_BLANK_PATH   "/sys/class/graphics/fb0/blank"
 #define BRIGHTNESS_PATH "/sys/class/backlight/spi3.0/brightness"
 #define BRIGHTNESS_MIN  0
@@ -111,6 +112,7 @@ int  open_dev        (const char *path, bool grab_now);
 
 /* ── menu.c API ──────────────────────────────────────────────────────────── */
 void render(void);
+void net_invalidate(void);  /* mark network status cache stale */
 
 /* Declared here so menu.c's action callbacks can trigger FSM transitions
  * without duplicating state-mutation logic. */
