@@ -78,6 +78,10 @@ bool terminal_open(void)
         return false;
     }
 
+    if (write(g_tty_fd, ESC_DISABLE_BLANK, 6) < 0) {
+        log_err("failed to set blanking interval");
+    }
+
     g_tty = fdopen(g_tty_fd, "w");
     if (!g_tty) {
         log_err("fdopen " DEV_TTY);
@@ -113,6 +117,9 @@ bool terminal_restore(void)
 
 void terminal_close(void)
 {
+    if (g_tty_fd >= 0) {
+        write(g_tty_fd, ESC_RESTORE_BLANK, 6);
+    }
     terminal_restore();
     if (g_tty) { fclose(g_tty); g_tty = NULL; g_tty_fd = -1; }
 }
