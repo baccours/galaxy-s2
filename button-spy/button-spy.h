@@ -36,6 +36,10 @@
 #define KEY_BACK_CODE       158
 
 /* ── ANSI escape helpers ──────────────────────────────────────────────────── */
+// Blanking : 0 disable, restore to 1 min
+#define T_DISABLE_BLANK "\033[9;0]"
+#define T_RESTORE_BLANK "\033[9;1]"
+
 #define T_CLEAR  "\033[H\033[J"
 #define T_RESET  "\033[0m"
 #define T_BOLD   "\033[1m"
