@@ -5,6 +5,8 @@
 
   # Force terminal to recognize the 'linux' type to
   #   allow blanking after 1 minute of inactivity
+  # Set value can be read at
+  #   /sys/module/kernel/parameters/consoleblank
   # Redirecting to tty1 targets the physical screen
   TERM=linux setterm --blank 1 > /dev/tty1
 
