@@ -145,8 +145,8 @@ static const Transition TRANSITIONS[] = {
     { STATE_IDLE,       KEY_POWER,      th_idle_power      },
 
     { STATE_ANY,        KEY_MENU,       th_open_menu       },
-    { STATE_ANY,        KEY_HOMEPAGE,   th_home            },
-    { STATE_ANY,        KEY_POWER,      th_idle_power      },  /* unblank */
+    { STATE_ANY,        KEY_OK,         th_home            },
+    { STATE_ANY,        KEY_POWER,      th_idle_power      },
 };
 #define TRANSITION_COUNT ARRAY_SIZE(TRANSITIONS)
 
