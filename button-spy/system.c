@@ -50,10 +50,11 @@ void log_info(const char *fmt, ...)
 
 void log_err(const char *fmt, ...)
 {
+    int saved = errno;   /* capture before any stdio call can clobber it */
     va_list ap; va_start(ap, fmt);
     fprintf(stderr, "[menu] ERROR: ");
     vfprintf(stderr, fmt, ap);
-    fprintf(stderr, ": %s\n", strerror(errno));
+    fprintf(stderr, ": %s\n", strerror(saved));
     fflush(stderr);
     va_end(ap);
 }
@@ -204,7 +205,10 @@ int open_dev(const char *path, bool grab_now)
 {
     int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) { log_err("open %s", path); return -1; }
-    if (grab_now && ioctl(fd, EVIOCGRAB, (void *)1) < 0)
+    if (grab_now && ioctl(fd, EVIOCGRAB, (void *)1) < 0) {
         log_err("EVIOCGRAB %s", path);
+        close(fd);
+        return -1;
+    }
     return fd;
 }

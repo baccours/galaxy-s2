@@ -10,7 +10,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <linux/input.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
@@ -132,22 +131,22 @@ typedef struct {
 } Transition;
 
 static const Transition TRANSITIONS[] = {
-    { STATE_MENU,       KEY_VOLUMEUP_CODE,   th_menu_up         },
-    { STATE_MENU,       KEY_VOLUMEDOWN_CODE, th_menu_down       },
-    { STATE_MENU,       KEY_POWER_CODE,      th_menu_select     },
-    { STATE_MENU,       KEY_BACK_CODE,       th_menu_back       },
-    { STATE_MENU,       KEY_MENU_CODE,       th_close_menu      },
+    { STATE_MENU,       KEY_VOLUMEUP,   th_menu_up         },
+    { STATE_MENU,       KEY_VOLUMEDOWN, th_menu_down       },
+    { STATE_MENU,       KEY_POWER,      th_menu_select     },
+    { STATE_MENU,       KEY_BACK,       th_menu_back       },
+    { STATE_MENU,       KEY_MENU,       th_close_menu      },
 
-    { STATE_BRIGHTNESS, KEY_VOLUMEUP_CODE,   th_brightness_up   },
-    { STATE_BRIGHTNESS, KEY_VOLUMEDOWN_CODE, th_brightness_down },
-    { STATE_BRIGHTNESS, KEY_POWER_CODE,      th_brightness_exit },
-    { STATE_BRIGHTNESS, KEY_BACK_CODE,       th_brightness_exit },
+    { STATE_BRIGHTNESS, KEY_VOLUMEUP,   th_brightness_up   },
+    { STATE_BRIGHTNESS, KEY_VOLUMEDOWN, th_brightness_down },
+    { STATE_BRIGHTNESS, KEY_POWER,      th_brightness_exit },
+    { STATE_BRIGHTNESS, KEY_BACK,       th_brightness_exit },
 
-    { STATE_IDLE,       KEY_POWER_CODE,      th_idle_power      },
+    { STATE_IDLE,       KEY_POWER,      th_idle_power      },
 
-    { STATE_ANY,        KEY_MENU_CODE,       th_open_menu       },
-    { STATE_ANY,        KEY_HOME_CODE,       th_home            },
-    { STATE_ANY,        KEY_POWER_CODE,      th_idle_power      },  /* unblank */
+    { STATE_ANY,        KEY_MENU,       th_open_menu       },
+    { STATE_ANY,        KEY_HOMEPAGE,   th_home            },
+    { STATE_ANY,        KEY_POWER,      th_idle_power      },  /* unblank */
 };
 #define TRANSITION_COUNT ARRAY_SIZE(TRANSITIONS)
 

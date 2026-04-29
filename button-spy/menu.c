@@ -103,6 +103,28 @@ const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_ite
  * Rendering — single entry point
  * ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Box-drawing helper ───────────────────────────────────────────────────── */
+
+static void draw_hline(void)
+{
+    fputc('+', g_tty);
+    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
+    fputs("+\r\n", g_tty);
+}
+
+/* Print text left-aligned inside a box row; pads to fill BOX_W - 2.
+ * Returns the number of visible characters written (excluding ANSI codes). */
+static int box_title_row(const char *pre_esc, const char *text, const char *post_esc)
+{
+    fputs("| ", g_tty);
+    if (pre_esc)  fputs(pre_esc,  g_tty);
+    int vis = fputs(text, g_tty) >= 0 ? (int)strlen(text) : 0;
+    if (post_esc) fputs(post_esc, g_tty);
+    for (int i = vis; i < BOX_W - 2; i++) fputc(' ', g_tty);
+    fputs(T_CYAN " |\r\n", g_tty);
+    return vis;
+}
+
 static void render_menu(void)
 {
     /* Breadcrumb: walk from current node to root via parent pointers,
@@ -112,27 +134,27 @@ static void render_menu(void)
     for (const Menu *m = g_menu; m && depth < 16; m = m->parent)
         path[depth++] = m;
 
-    fputs(T_BOLD T_CYAN, g_tty);
+    /* Build the breadcrumb string so we can measure its visible length
+     * precisely — ANSI escapes must not be counted. */
+    char crumb[128] = "";
+    int  vis        = 0;
+    for (int i = depth - 1; i >= 0; i--) {
+        const char *sep = (i > 0) ? " > " : "";
+        vis += (int)(strlen(path[i]->title) + strlen(sep));
+        strncat(crumb, path[i]->title, sizeof(crumb) - strlen(crumb) - 1);
+        strncat(crumb, sep,            sizeof(crumb) - strlen(crumb) - 1);
+    }
 
-    /* Top border */
-    fputs("+", g_tty);
-    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
-    fputs("+\r\n", g_tty);
+    fputs(T_BOLD T_CYAN, g_tty);
+    draw_hline();
 
     /* Breadcrumb row */
     fputs("| " T_YELLOW, g_tty);
-    int used = 0;
-    for (int i = depth - 1; i >= 0; i--) {
-        int n = fprintf(g_tty, "%s%s", path[i]->title, i > 0 ? " > " : "");
-        if (n > 0) used += n;
-    }
-    for (int i = used; i < BOX_W - 2; i++) fputc(' ', g_tty);
+    fputs(crumb, g_tty);
+    for (int i = vis; i < BOX_W - 2; i++) fputc(' ', g_tty);
     fputs(T_CYAN " |\r\n", g_tty);
 
-    /* Separator */
-    fputs("+", g_tty);
-    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
-    fputs("+\r\n", g_tty);
+    draw_hline();
 
     /* Items */
     for (uint8_t i = 0; i < g_menu->count; i++) {
@@ -153,38 +175,27 @@ static void render_menu(void)
                     BOX_W - 8, g_menu->items[i].label, badge_buf, arrow);
     }
 
-    /* Bottom border */
-    fputs(T_CYAN "+", g_tty);
-    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
-    fputs("+\r\n", g_tty);
-
+    draw_hline();
     fputs(T_DIM "VOL+/-: navigate   PWR: select   BACK: back\r\n" T_RESET, g_tty);
 }
 
 static void render_brightness(void)
 {
     fputs(T_BOLD T_CYAN, g_tty);
+    draw_hline();
 
-    /* Box top */
-    fputs("+", g_tty);
-    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
-    fputs("+\r\n", g_tty);
+    box_title_row(T_YELLOW, "Brightness", NULL);
 
-    /* Title */
-    fputs("| " T_YELLOW, g_tty);
-    int tlen = fprintf(g_tty, "Brightness");
-    for (int i = tlen; i < BOX_W - 2; i++) fputc(' ', g_tty);
-    fputs(T_CYAN " |\r\n", g_tty);
+    draw_hline();
 
-    /* Separator */
-    fputs("+", g_tty);
-    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
-    fputs("+\r\n", g_tty);
+    /* Level fraction — measure visible chars written */
+    char level_buf[16];
+    int level_vis = snprintf(level_buf, sizeof(level_buf),
+                             " %2d / %-2d ", g_brightness, BRIGHTNESS_MAX);
+    fprintf(g_tty, "| " T_RESET "%s" T_CYAN, level_buf);
 
-    /* Level fraction */
-    fprintf(g_tty, "| " T_RESET " %2d / %-2d " T_CYAN, g_brightness, BRIGHTNESS_MAX);
-
-    /* Bar: filled in bold, empty in dim; padded to fill box width */
+    /* Bar: filled in bold, empty in dim */
+    int bar_vis = BRIGHTNESS_MAX + 1 + 2; /* chars inside [] plus the brackets */
     fputs(T_BOLD "[", g_tty);
     for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
         if (i == g_brightness) fputs(T_DIM, g_tty);
@@ -192,15 +203,12 @@ static void render_brightness(void)
     }
     fputs(T_RESET T_CYAN "]", g_tty);
 
-    /* Pad remaining space: BOX_W - 2 (borders) - 10 (level) - 27 (bar) */
-    for (int i = 0; i < BOX_W - 39; i++) fputc(' ', g_tty);
+    /* Pad: BOX_W - 2 borders - "| " prefix - level - bar */
+    int pad = BOX_W - 2 - level_vis - bar_vis;
+    for (int i = 0; i < pad; i++) fputc(' ', g_tty);
     fputs(" |\r\n", g_tty);
 
-    /* Box bottom */
-    fputs(T_CYAN "+", g_tty);
-    for (int i = 0; i < BOX_W; i++) fputc('-', g_tty);
-    fputs("+\r\n", g_tty);
-
+    draw_hline();
     fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, g_tty);
 }
 
