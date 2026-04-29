@@ -29,7 +29,10 @@
 #define BRIGHTNESS_DEFAULT 12
 
 /* ── ANSI escape helpers ──────────────────────────────────────────────────── */
-// Blanking : 0 disable, restore to 1 min
+/* Blanking : 0 disable, restore to 1 min
+ *  Set value can be read at
+ *  /sys/module/kernel/parameters/consoleblank
+ */
 #define T_DISABLE_BLANK "\033[9;0]"
 #define T_RESTORE_BLANK "\033[9;1]"
 
