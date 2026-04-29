@@ -7,6 +7,7 @@
 #define BTNSPY_H
 
 #define _GNU_SOURCE
+#include <linux/input.h>   /* KEY_VOLUMEUP, KEY_POWER, … */
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -27,13 +28,9 @@
 #define BRIGHTNESS_MAX  24
 #define BRIGHTNESS_DEFAULT 12
 
-/* ── Key codes ────────────────────────────────────────────────────────────── */
-#define KEY_VOLUMEUP_CODE   115
-#define KEY_VOLUMEDOWN_CODE 114
-#define KEY_POWER_CODE      116
-#define KEY_HOME_CODE       352
-#define KEY_MENU_CODE       139
-#define KEY_BACK_CODE       158
+/* ── Key codes — use kernel names from <linux/input.h> directly ───────────── */
+/*   KEY_VOLUMEUP   115   KEY_VOLUMEDOWN 114   KEY_POWER  116
+ *   KEY_HOMEPAGE   172   KEY_MENU       139   KEY_BACK   158           */
 
 /* ── ANSI escape helpers ──────────────────────────────────────────────────── */
 // Blanking : 0 disable, restore to 1 min
@@ -57,7 +54,7 @@ typedef enum {
     STATE_IDLE,       /* screen on, no menu                    */
     STATE_MENU,       /* menu visible and navigable            */
     STATE_BRIGHTNESS, /* brightness adjustment overlay         */
-    STATE_ANY,        /* wildcard — matches any state in table */
+    STATE_ANY,        /* sentinel — wildcard in transition table; not a real state */
 } AppState;
 
 /* ── Menu types ───────────────────────────────────────────────────────────── */
