@@ -13,13 +13,13 @@ MIN=3300
 # Percentage: ((Current - Min) * 100) / (Max - Min)
 P=$(( (VOLT - MIN) / 9 ))
 
-# "short" output mode
-if [ "$1" = "-s" ]; then
+# "percentage" output mode
+if [ "$1" = "-p" ]; then
     echo "$P"
     exit 0
 fi
 
-# Output the result
+# Default "verbose" output mode
 echo "--- Galaxy S2 Battery Status ---"
 echo "Current Time: $(date +%H:%M:%S)"
 echo "Reported: $(cat $BATT_DIR/capacity)%"
