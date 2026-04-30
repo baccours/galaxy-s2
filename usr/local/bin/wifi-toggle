@@ -1,0 +1,55 @@
+#!/bin/sh
+
+# Script added to /etc/doas.d/99-privilege_scripts.conf
+# If the Effective User ID is not 0 (root), re-run with doas
+if [ "$(id -u)" -ne 0 ]; then
+  exec doas "$0" "$@"
+fi
+
+IFACE=wlan0
+
+wifi_off() {
+  rc-service networking stop
+  rc-service wpa_supplicant stop #2>/dev/null
+  killall -9 udhcpc dhcpcd #2>/dev/null 
+  ip link set $IFACE down #2>/dev/null
+  rfkill block wifi
+  #sleep 0.5
+  modprobe -r b rcmfmac_wcc brcmfmac brcmutil #2>/dev/null
+  rm -f /var/run/wpa_supplicant/$IFACE
+  echo "Wi-Fi is now OFF"
+}
+
+wifi_on() {
+  modprobe brcmfmac #2>/dev/null
+  rfkill unblock wifi
+  #sleep 2
+  ip link set $IFACE up #2>/dev/null
+  rc-service wpa_supplicant start
+  #sleep 3
+  rc-service networking start
+  echo "Wi-Fi is now ON"
+}
+
+
+wifi_status() {
+  if lsmod | grep -q "brcm" && \
+     rfkill  list wifi | grep -q "Soft blocked: no";
+  then
+    echo "Wi-Fi is ON"
+    exit 0
+  else
+    echo "Wi-Fi is OFF"
+    exit 1
+  fi
+}
+
+case "$1" in
+  off)    wifi_off ;;
+  on)     wifi_on ;;
+  status|s) wifi_status ;;
+  *)
+    echo "Usage: $0 {on|off|status}"
+    exit 1
+    ;;
+esac
