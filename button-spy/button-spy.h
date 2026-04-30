@@ -22,6 +22,7 @@
 #define DEV_TOUCH       "/dev/input/event2"
 #define DEV_TTY              "/dev/tty1"
 #define BT_TOGGLE_SCRIPT     "/usr/local/bin/bluetooth-toggle"
+#define WIFI_TOGGLE_SCRIPT   "/usr/local/bin/wifi-toggle"
 #define FB_BLANK_PATH   "/sys/class/graphics/fb0/blank"
 #define BRIGHTNESS_PATH "/sys/class/backlight/spi3.0/brightness"
 #define BRIGHTNESS_MIN  0
