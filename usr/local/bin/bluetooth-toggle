@@ -6,36 +6,41 @@ if [ "$(id -u)" -ne 0 ];
   then exec doas "$0" "$@"
 fi
 
+bluetooth_off() {
+  # 1. Block radio
+  rfkill block bluetooth
+  # 2. Remove hardware transport and drivers
+  modprobe -ar hci_uart btbcm bluetooth 2>/dev/null
+  echo "Bluetooth is now OFF" 
+}
+
+bluetooth_on() {
+  # 1. Load the transport (kernel handles dependencies)
+  modprobe hci_uart
+  # 2. Ensure it's not soft-blocked
+  rfkill unblock bluetooth
+  echo "Bluetooth is now ON"
+
+}
+
+bluetooth_status() {
+  if lsmod | grep -qE "bt|hci|bluetooth" && \
+     rfkill  list bluetooth | grep -q "Soft blocked: no";
+  then
+    echo "Bluetooth is ON"
+    exit 0
+  else
+    echo "Bluetooth is OFF"
+    exit 1
+  fi
+}
+
 case "$1" in
-  off)
-    echo "Shutting down Bluetooth hardware..."
-    # 1. Block radio to be safe
-    rfkill block bluetooth 2>/dev/null
-    # 2. Remove the hardware transport and drivers
-    modprobe -ar hci_uart btbcm bluetooth 2>/dev/null
-    echo "Bluetooth is now OFF."
-    ;;
-  on)
-    echo "Initializing Bluetooth hardware..."
-    # 1. Load the transport (kernel handles dependencies)
-    modprobe hci_uart
-    # 2. Ensure it's not soft-blocked
-    rfkill unblock bluetooth
-    echo "Bluetooth is now ON."
-    ;;
-  status|st|is)
-    if lsmod | grep -qE "bt|hci|bluetooth" && \
-       rfkill  list bluetooth | grep -q "Soft blocked: no";
-    then
-      echo "Bluetooth is ON"
-      exit 0
-    else
-      echo "Bluetooth is OFF"
-      exit 1
-    fi
-    ;;
+  off)  bluetooth_off ;;
+  on)   bluetooth_on ;;
+  status|s) bluetooth_status ;;
   *)
-    echo "Usage: bt {on|off|status}"
+    echo "Usage: $0 {on|off|status}"
     exit 1
     ;;
 esac
