@@ -10,23 +10,21 @@ IFACE=wlan0
 
 wifi_off() {
   rc-service networking stop
-  rc-service wpa_supplicant stop #2>/dev/null
-  killall -9 udhcpc dhcpcd #2>/dev/null 
-  ip link set $IFACE down #2>/dev/null
+  rc-service wpa_supplicant stop 2>/dev/null
+  ip link set $IFACE down 2>/dev/null
   rfkill block wifi
-  #sleep 0.5
-  modprobe -r b rcmfmac_wcc brcmfmac brcmutil #2>/dev/null
+  modprobe -ar brcmfmac_wcc brcmfmac brcmutil
   rm -f /var/run/wpa_supplicant/$IFACE
   echo "Wi-Fi is now OFF"
 }
 
 wifi_on() {
-  modprobe brcmfmac #2>/dev/null
+  modprobe brcmfmac
   rfkill unblock wifi
-  #sleep 2
-  ip link set $IFACE up #2>/dev/null
+  sleep 1
+  ip link set $IFACE up
   rc-service wpa_supplicant start
-  #sleep 3
+  sleep 1
   rc-service networking start
   echo "Wi-Fi is now ON"
 }
