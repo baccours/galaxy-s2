@@ -23,8 +23,7 @@ static bool g_net_dirty  = true;   /* set true to force re-query on next render 
 static void net_query_status(void)
 {
     if (!g_net_dirty) return;
-    char *const wifi_chk[] = { "sh", "-c",
-        "rfkill list wifi | grep -q 'Soft blocked: no'", NULL };
+    char *const wifi_chk[] = { WIFI_TOGGLE_SCRIPT, "status", NULL };
     char *const bt_chk[] = { BT_TOGGLE_SCRIPT, "status", NULL };
     g_wifi_on  = (run_cmd((char *const *)wifi_chk) == 0);
     g_bt_on    = (run_cmd((char *const *)bt_chk)   == 0);
@@ -42,8 +41,8 @@ void net_invalidate(void) { g_net_dirty = true; }
 
 static void action_wifi_toggle(void)
 {
-    char *const off[] = { "rfkill", "block",   "wifi", NULL };
-    char *const on[]  = { "rfkill", "unblock", "wifi", NULL };
+    char *const off[] = { WIFI_TOGGLE_SCRIPT, "off", NULL };
+    char *const on[]  = { WIFI_TOGGLE_SCRIPT, "on",  NULL };
     run_cmd(g_wifi_on ? off : on);
     g_wifi_on = !g_wifi_on;
 }
