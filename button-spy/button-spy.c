@@ -183,11 +183,6 @@ static void cleanup(void)
     }
     terminal_close();
 
-    /* Release touchscreen inhibit before exit */
-    touch_inhibit(false);
-
-    /* Explicitly release grabs so other processes can use the devices
-     * immediately — do not rely on the kernel releasing on fd close. */
     if (g_fd_gpio     >= 0) release_button_dev(g_fd_gpio);
     if (g_fd_touchkey >= 0) release_button_dev(g_fd_touchkey);
 
@@ -196,7 +191,10 @@ static void cleanup(void)
         close(g_fd_fb);
     }
 
-    if (g_fd_inhibit >= 0) close(g_fd_inhibit);
+    if (g_fd_inhibit >= 0) {
+        touch_inhibit(false);
+        close(g_fd_inhibit);
+    }
 
     log_info("done");
 }
