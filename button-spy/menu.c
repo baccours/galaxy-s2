@@ -43,7 +43,7 @@ static void action_wifi_toggle(void)
 {
     char *const args[] = {
         (char *)WIFI_TOGGLE_SCRIPT,
-        (char *)g_wifi_on ? "off" : "on,
+        (char *)g_wifi_on ? "off" : "on",
         NULL
     };
     g_wifi_on = !g_wifi_on;
@@ -54,7 +54,7 @@ static void action_bt_toggle(void)
 {
     char *const args[] = {
         (char *)BT_TOGGLE_SCRIPT,
-        (char *)g_bt_on ? "off" : "on,
+        (char *)g_bt_on ? "off" : "on",
         NULL
     };
     g_bt_on = !g_bt_on;
