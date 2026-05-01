@@ -107,6 +107,8 @@ void terminal_close  (void);
 
 void fb_set_blank      (bool blank);
 void touch_inhibit     (bool inhibit);
+int  open_button_dev   (const char *path);
+void release_button_dev(int fd);
 int  brightness_read   (void);
 void brightness_write  (int level);
 int  run_cmd           (char *const argv[]);

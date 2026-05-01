@@ -167,6 +167,27 @@ void fbkbd_set(bool start)
         g_fbkbd_on = start;
 }
 
+/* ── Button device helpers ────────────────────────────────────────────────── */
+
+int open_button_dev(const char *path)
+{
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) { log_err("open %s", path); return -1; }
+    if (ioctl(fd, EVIOCGRAB, (void *)1) < 0) {
+        log_err("EVIOCGRAB %s", path);
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+void release_button_dev(int fd)
+{
+    if (fd < 0) return;
+    if (ioctl(fd, EVIOCGRAB, (void *)0) < 0)
+        log_err("EVIOCGRAB release");
+}
+
 /* ── Brightness ───────────────────────────────────────────────────────────── */
 int brightness_read(void)
 {

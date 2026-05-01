@@ -173,20 +173,6 @@ static void drain(int fd)
         log_err("read event");
 }
 
-/* ── Button device open — open + exclusive grab ───────────────────────────── */
-
-static int open_button_dev(const char *path)
-{
-    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0) { log_err("open %s", path); return -1; }
-    if (ioctl(fd, EVIOCGRAB, (void *)1) < 0) {
-        log_err("EVIOCGRAB %s", path);
-        close(fd);
-        return -1;
-    }
-    return fd;
-}
-
 /* ── Cleanup & signals ────────────────────────────────────────────────────── */
 
 static void cleanup(void)
@@ -200,8 +186,10 @@ static void cleanup(void)
     /* Release touchscreen inhibit before exit */
     touch_inhibit(false);
 
-    if (g_fd_gpio     >= 0) close(g_fd_gpio);
-    if (g_fd_touchkey >= 0) close(g_fd_touchkey);
+    /* Explicitly release grabs so other processes can use the devices
+     * immediately — do not rely on the kernel releasing on fd close. */
+    if (g_fd_gpio     >= 0) { release_button_dev(g_fd_gpio);     close(g_fd_gpio); }
+    if (g_fd_touchkey >= 0) { release_button_dev(g_fd_touchkey); close(g_fd_touchkey); }
 
     if (g_fd_fb >= 0) {
         fb_set_blank(false);
