@@ -188,8 +188,8 @@ static void cleanup(void)
 
     /* Explicitly release grabs so other processes can use the devices
      * immediately — do not rely on the kernel releasing on fd close. */
-    if (g_fd_gpio     >= 0) { release_button_dev(g_fd_gpio);     close(g_fd_gpio); }
-    if (g_fd_touchkey >= 0) { release_button_dev(g_fd_touchkey); close(g_fd_touchkey); }
+    if (g_fd_gpio     >= 0) release_button_dev(g_fd_gpio);
+    if (g_fd_touchkey >= 0) release_button_dev(g_fd_touchkey);
 
     if (g_fd_fb >= 0) {
         fb_set_blank(false);

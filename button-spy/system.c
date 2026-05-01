@@ -186,6 +186,7 @@ void release_button_dev(int fd)
     if (fd < 0) return;
     if (ioctl(fd, EVIOCGRAB, (void *)0) < 0)
         log_err("EVIOCGRAB release");
+    close(fd);
 }
 
 /* ── Brightness ───────────────────────────────────────────────────────────── */
