@@ -155,7 +155,7 @@ int run_cmd(char *const argv[])
 void fbkbd_set(bool start)
 {
     const char *state = start ? "start" : "stop";
-    char *const args[] = { "rc-service", "fbkeyboard", state, NULL };
+    char *const args[] = { "rc-service", "fbkeyboard", (char *)state, NULL };
     if (run_cmd(args) == 0)
         g_fbkbd_on = start;
 }
