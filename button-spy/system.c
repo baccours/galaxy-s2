@@ -135,7 +135,6 @@ void fb_set_blank(bool blank)
 
 void touch_inhibit(bool inhibit)
 {
-    if (g_fd_inhibit < 0) return;
     const char c = inhibit ? '1' : '0';
     if (write(g_fd_inhibit, &c, 1) < 0) log_err("touch inhibit write");
     lseek(g_fd_inhibit, 0, SEEK_SET);
