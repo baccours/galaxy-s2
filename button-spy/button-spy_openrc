@@ -1,7 +1,7 @@
 #!/sbin/openrc-run
 
 name="button-spy"
-description="postmarketOS GT-I9100 button menu displayed in tty1"
+description="pmOS GT-I9100 button menu displayed in tty1"
 command="/usr/local/bin/button-spy"
 command_background=true
 pidfile="/run/${RC_SVCNAME}.pid"
