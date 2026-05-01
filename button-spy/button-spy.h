@@ -19,12 +19,12 @@
 /* ── Device paths ─────────────────────────────────────────────────────────── */
 #define DEV_GPIO        "/dev/input/event0"
 #define DEV_TOUCHKEY    "/dev/input/event1"
-#define DEV_TOUCH       "/dev/input/event2"
 #define DEV_TTY              "/dev/tty1"
 #define BT_TOGGLE_SCRIPT     "/usr/local/bin/bluetooth-toggle"
 #define WIFI_TOGGLE_SCRIPT   "/usr/local/bin/wifi-toggle"
-#define FB_BLANK_PATH   "/sys/class/graphics/fb0/blank"
-#define BRIGHTNESS_PATH "/sys/class/backlight/spi3.0/brightness"
+#define FB_BLANK_PATH        "/sys/class/graphics/fb0/blank"
+#define TOUCH_INHIBIT_PATH   "/sys/class/input/event2/device/inhibited"
+#define BRIGHTNESS_PATH      "/sys/class/backlight/spi3.0/brightness"
 #define BRIGHTNESS_MIN  0
 #define BRIGHTNESS_MAX  24
 #define BRIGHTNESS_DEFAULT 12
@@ -87,9 +87,9 @@ extern int         g_brightness;
 
 extern int   g_fd_gpio;
 extern int   g_fd_touchkey;
-extern int   g_fd_touch;
-extern int   g_fd_fb;
-extern FILE *g_tty;   /* DEV_TTY — all display output goes here */
+extern int   g_fd_fb;       /* /sys/class/graphics/fb0/blank   — kept open */
+extern int   g_fd_inhibit;  /* /sys/class/input/.../inhibited  — kept open */
+extern FILE *g_tty;         /* DEV_TTY — all display output goes here */
 
 /* ── Menu tree — defined in menu.c ───────────────────────────────────────── */
 extern const Menu g_root_menu;
@@ -105,14 +105,12 @@ void terminal_raw    (void);
 bool terminal_restore(void);
 void terminal_close  (void);
 
-void fb_set_blank    (bool blank);
-int  brightness_read (void);
-void brightness_write(int level);
-int  run_cmd         (char *const argv[]);
-void grab            (int fd, bool on);
-void update_grabs    (void);
-void fbkbd_set       (bool start);
-int  open_dev        (const char *path, bool grab_now);
+void fb_set_blank      (bool blank);
+void touch_inhibit     (bool inhibit);
+int  brightness_read   (void);
+void brightness_write  (int level);
+int  run_cmd           (char *const argv[]);
+void fbkbd_set         (bool start);
 
 /* ── menu.c API ──────────────────────────────────────────────────────────── */
 void render(void);

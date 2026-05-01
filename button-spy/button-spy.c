@@ -51,7 +51,7 @@ void th_close_menu(void)
     g_menu  = &g_root_menu;
     g_sel   = 0;
     g_state = STATE_IDLE;
-    update_grabs();
+    touch_inhibit(false);
     terminal_restore();
     fputs(T_CLEAR T_SHOW, g_tty);
     fflush(g_tty);
@@ -75,7 +75,7 @@ static void th_open_menu(void)
     g_menu  = &g_root_menu;
     g_sel   = 0;
     g_state = STATE_MENU;
-    update_grabs();
+    touch_inhibit(true);
     terminal_raw();
     fputs(T_HIDE, g_tty);
     render();
@@ -84,7 +84,7 @@ static void th_open_menu(void)
 static void th_idle_power(void)
 {
     fb_set_blank(!g_screen_blank);
-    update_grabs();
+    touch_inhibit(g_screen_blank);
 }
 
 static void th_home(void)
@@ -173,6 +173,20 @@ static void drain(int fd)
         log_err("read event");
 }
 
+/* ── Button device open — open + exclusive grab ───────────────────────────── */
+
+static int open_button_dev(const char *path)
+{
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) { log_err("open %s", path); return -1; }
+    if (ioctl(fd, EVIOCGRAB, (void *)1) < 0) {
+        log_err("EVIOCGRAB %s", path);
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
 /* ── Cleanup & signals ────────────────────────────────────────────────────── */
 
 static void cleanup(void)
@@ -183,20 +197,18 @@ static void cleanup(void)
     }
     terminal_close();
 
-    grab(g_fd_gpio,     false);
-    grab(g_fd_touchkey, false);
-    g_state        = STATE_IDLE;
-    g_screen_blank = false;
-    update_grabs();
+    /* Release touchscreen inhibit before exit */
+    touch_inhibit(false);
 
     if (g_fd_gpio     >= 0) close(g_fd_gpio);
     if (g_fd_touchkey >= 0) close(g_fd_touchkey);
-    if (g_fd_touch    >= 0) close(g_fd_touch);
 
     if (g_fd_fb >= 0) {
         fb_set_blank(false);
         close(g_fd_fb);
     }
+
+    if (g_fd_inhibit >= 0) close(g_fd_inhibit);
 
     log_info("done");
 }
@@ -216,12 +228,12 @@ int main(void)
     g_net_menu.parent = &g_root_menu;
     g_pwr_menu.parent = &g_root_menu;
 
-    g_fd_fb       = open(FB_BLANK_PATH, O_WRONLY | O_CLOEXEC);
-    g_fd_gpio     = open_dev(DEV_GPIO,     true);
-    g_fd_touchkey = open_dev(DEV_TOUCHKEY, true);
-    g_fd_touch    = open_dev(DEV_TOUCH,    false);
+    g_fd_fb      = open(FB_BLANK_PATH,      O_WRONLY | O_CLOEXEC);
+    g_fd_inhibit = open(TOUCH_INHIBIT_PATH, O_WRONLY | O_CLOEXEC);
+    g_fd_gpio     = open_button_dev(DEV_GPIO);
+    g_fd_touchkey = open_button_dev(DEV_TOUCHKEY);
 
-    if (g_fd_fb < 0 || g_fd_gpio < 0 || g_fd_touchkey < 0) {
+    if (g_fd_fb < 0 || g_fd_inhibit < 0 || g_fd_gpio < 0 || g_fd_touchkey < 0) {
         log_err("open required device");
         cleanup();
         return EXIT_FAILURE;

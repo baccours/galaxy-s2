@@ -1,7 +1,8 @@
 /*
  * system.c — low-level system helpers
  *
- * Owns: terminal, fb_blank, run_cmd, grab, fbkeyboard, brightness, logging.
+ * Owns: terminal, fb_blank, touch_inhibit, run_cmd, fbkeyboard,
+ *       brightness, logging.
  * Nothing here knows about menus or the FSM.
  */
 
@@ -30,13 +31,13 @@ int                   g_brightness   = BRIGHTNESS_DEFAULT;
 
 int   g_fd_gpio     = -1;
 int   g_fd_touchkey = -1;
-int   g_fd_touch    = -1;
 int   g_fd_fb       = -1;
+int   g_fd_inhibit  = -1;
 FILE *g_tty         = NULL;
 
 /* ── Logging ──────────────────────────────────────────────────────────────
  * Goes to stderr, separate from menu rendering on g_tty.
- * Redirect with: sudo ./menu 2>log.txt
+ * Redirect with: sudo ./button-spy 2>log.txt
  */
 void log_info(const char *fmt, ...)
 {
@@ -125,13 +126,25 @@ void terminal_close(void)
     if (g_tty) { fclose(g_tty); g_tty = NULL; g_tty_fd = -1; }
 }
 
-/* ── Framebuffer blank ────────────────────────────────────────────────────── */
+/* ── sysfs write helpers ──────────────────────────────────────────────────
+ * Both fb_blank and touch_inhibit are simple '0'/'1' sysfs knobs.
+ * We keep both fds open for the process lifetime and lseek back to 0
+ * before each write — exactly the same pattern for both.
+ */
 void fb_set_blank(bool blank)
 {
     const char c = blank ? '1' : '0';
     if (write(g_fd_fb, &c, 1) < 0) log_err("fb_blank write");
     else g_screen_blank = blank;
     lseek(g_fd_fb, 0, SEEK_SET);
+}
+
+void touch_inhibit(bool inhibit)
+{
+    if (g_fd_inhibit < 0) return;
+    const char c = inhibit ? '1' : '0';
+    if (write(g_fd_inhibit, &c, 1) < 0) log_err("touch inhibit write");
+    lseek(g_fd_inhibit, 0, SEEK_SET);
 }
 
 /* ── Process execution — fork+execvp, no shell ───────────────────────────── */
@@ -143,30 +156,6 @@ int run_cmd(char *const argv[])
     int st;
     if (waitpid(pid, &st, 0) < 0) { log_err("waitpid"); return -1; }
     return WIFEXITED(st) ? WEXITSTATUS(st) : -1;
-}
-
-/* ── Input device grab helpers ────────────────────────────────────────────── */
-
-/* g_touch_grabbed tracks current state so update_grabs() is idempotent
- * (EVIOCGRAB returns EINVAL on a double-grab or spurious release). */
-static bool g_touch_grabbed = false;
-
-void grab(int fd, bool on)
-{
-    if (fd < 0) return;
-    if (ioctl(fd, EVIOCGRAB, on ? (void *)1 : (void *)0) < 0 && on)
-        log_err("EVIOCGRAB");
-}
-
-/* Touchscreen grabbed when menu is open or screen is blank.
- * fbkeyboard is a virtual device on the touchscreen — grabbing the
- * touchscreen implicitly disables it too. */
-void update_grabs(void)
-{
-    bool want = (g_state == STATE_MENU || g_screen_blank);
-    if (want == g_touch_grabbed) return;
-    grab(g_fd_touch, want);
-    g_touch_grabbed = want;
 }
 
 /* ── fbkeyboard OpenRC service ────────────────────────────────────────────── */
@@ -198,17 +187,4 @@ void brightness_write(int level)
     if (!f) { log_err("open " BRIGHTNESS_PATH); return; }
     fprintf(f, "%d\n", level);
     fclose(f);
-}
-
-/* ── Device open helper ───────────────────────────────────────────────────── */
-int open_dev(const char *path, bool grab_now)
-{
-    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0) { log_err("open %s", path); return -1; }
-    if (grab_now && ioctl(fd, EVIOCGRAB, (void *)1) < 0) {
-        log_err("EVIOCGRAB %s", path);
-        close(fd);
-        return -1;
-    }
-    return fd;
 }
