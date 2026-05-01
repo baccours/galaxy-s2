@@ -35,10 +35,7 @@ int   g_fd_fb       = -1;
 int   g_fd_inhibit  = -1;
 FILE *g_tty         = NULL;
 
-/* ── Logging ──────────────────────────────────────────────────────────────
- * Goes to stderr, separate from menu rendering on g_tty.
- * Redirect with: sudo ./button-spy 2>log.txt
- */
+/* ── Logging ────────────────────────────────────────────────────────────── */
 void log_info(const char *fmt, ...)
 {
     va_list ap; va_start(ap, fmt);
@@ -63,7 +60,6 @@ void log_err(const char *fmt, ...)
 /* ── Terminal ─────────────────────────────────────────────────────────────
  * DEV_TTY is opened once and kept for the process lifetime.
  * terminal_raw/restore only toggle termios flags — no reopen.
- * Works identically whether launched locally, over SSH, or as a service.
  */
 static struct termios g_orig_termios;
 static bool           g_termios_saved = false;
@@ -127,9 +123,7 @@ void terminal_close(void)
 }
 
 /* ── sysfs write helpers ──────────────────────────────────────────────────
- * Both fb_blank and touch_inhibit are simple '0'/'1' sysfs knobs.
- * We keep both fds open for the process lifetime and lseek back to 0
- * before each write — exactly the same pattern for both.
+ * We keep fds open for the process lifetime and lseek back to 0
  */
 void fb_set_blank(bool blank)
 {
@@ -161,9 +155,9 @@ int run_cmd(char *const argv[])
 /* ── fbkeyboard OpenRC service ────────────────────────────────────────────── */
 void fbkbd_set(bool start)
 {
-    char *const a_start[] = { "rc-service", "fbkeyboard", "start", NULL };
-    char *const a_stop[]  = { "rc-service", "fbkeyboard", "stop",  NULL };
-    if (run_cmd(start ? a_start : a_stop) == 0)
+    const char *state = start ? "start" : "stop";
+    char *const args[] = { "rc-service", "fbkeyboard", state, NULL };
+    if (run_cmd(args) == 0)
         g_fbkbd_on = start;
 }
 
