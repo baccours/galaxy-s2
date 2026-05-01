@@ -41,18 +41,18 @@ void net_invalidate(void) { g_net_dirty = true; }
 
 static void action_wifi_toggle(void)
 {
-    char *const off[] = { WIFI_TOGGLE_SCRIPT, "off", NULL };
-    char *const on[]  = { WIFI_TOGGLE_SCRIPT, "on",  NULL };
-    run_cmd(g_wifi_on ? off : on);
+    const char *state = g_wifi_on ? "off" : "on";
+    char *const args[] = { WIFI_TOGGLE_SCRIPT, state, NULL };
     g_wifi_on = !g_wifi_on;
+    run_cmd(args);
 }
 
 static void action_bt_toggle(void)
 {
-    char *const off[] = { BT_TOGGLE_SCRIPT, "off", NULL };
-    char *const on[]  = { BT_TOGGLE_SCRIPT, "on",  NULL };
-    run_cmd(g_bt_on ? off : on);
+    const char *state = g_bt_on ? "off" : "on";
+    char *const args[] = { BT_TOGGLE_SCRIPT, state, NULL };
     g_bt_on = !g_bt_on;
+    run_cmd(args);
 }
 
 static void action_reboot(void)
