@@ -90,7 +90,7 @@ static void th_idle_power(void)
 
 static void th_home(void)
 {
-    if (g_screen_blank) return;
+    if (g_state == STATE_MENU || g_screen_blank) return;
     fbkbd_set(!g_fbkbd_on);
 }
 
