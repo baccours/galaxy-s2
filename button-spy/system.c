@@ -29,11 +29,11 @@ const Menu           *g_menu         = NULL;
 uint8_t               g_sel          = 0;
 int                   g_brightness   = BRIGHTNESS_DEFAULT;
 
-int   g_fd_gpio     = -1;
-int   g_fd_touchkey = -1;
-int   g_fd_fb       = -1;
-int   g_fd_inhibit  = -1;
-FILE *g_tty         = NULL;
+int   g_fd_gpio          = -1;
+int   g_fd_touchkey      = -1;
+int   g_fd_fb            = -1;
+int   g_fd_touchinhibit  = -1;
+FILE *g_tty              = NULL;
 
 /* ── Logging ────────────────────────────────────────────────────────────── */
 void log_info(const char *fmt, ...)
@@ -136,8 +136,8 @@ void fb_set_blank(bool blank)
 void touch_inhibit(bool inhibit)
 {
     const char c = inhibit ? '1' : '0';
-    if (write(g_fd_inhibit, &c, 1) < 0) log_err("touch inhibit write");
-    lseek(g_fd_inhibit, 0, SEEK_SET);
+    if (write(g_fd_touchinhibit, &c, 1) < 0) log_err("touch inhibit write");
+    lseek(g_fd_touchinhibit, 0, SEEK_SET);
 }
 
 /* ── Process execution — fork+execvp, no shell ───────────────────────────── */
