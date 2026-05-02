@@ -122,7 +122,7 @@ static MenuItem g_net_items[] = {
     { "Toggle WiFi",      action_wifi_toggle, NULL, status_wifi },
     { "Toggle Bluetooth", action_bt_toggle,   NULL, status_bt   },
 };
-Menu g_net_menu = { "Networking", g_net_items, ARRAY_SIZE(g_net_items), NULL, NULL };
+Menu g_net_menu = { "Networking", g_net_items, ARRAY_SIZE(g_net_items), NULL, net_on_enter };
 
 static MenuItem g_pwr_items[] = {
     { "Reboot",    action_reboot,   NULL, NULL },
@@ -131,8 +131,8 @@ static MenuItem g_pwr_items[] = {
 Menu g_pwr_menu = { "Power", g_pwr_items, ARRAY_SIZE(g_pwr_items), NULL, NULL };
 
 /* Item-less overlay menus — on_enter linked in main() */
-Menu g_brightness_menu = { "Brightness",     NULL, 0, NULL, NULL };
-Menu g_battery_menu    = { "Battery Status", NULL, 0, NULL, NULL };
+Menu g_brightness_menu = { "Brightness",     NULL, 0, NULL, brightness_on_enter };
+Menu g_battery_menu    = { "Battery Status", NULL, 0, NULL, battery_on_enter    };
 
 static MenuItem g_root_items[] = {
     { "Networking",     NULL,          &g_net_menu,       NULL },
@@ -148,15 +148,9 @@ const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_ite
 void menu_init(void)
 {
     g_net_menu.parent        = &g_root_menu;
-    g_net_menu.on_enter      = net_on_enter;
-
     g_pwr_menu.parent        = &g_root_menu;
-
-    g_brightness_menu.parent   = &g_root_menu;
-    g_brightness_menu.on_enter = brightness_on_enter;
-
+    g_brightness_menu.parent = &g_root_menu;
     g_battery_menu.parent    = &g_root_menu;
-    g_battery_menu.on_enter  = battery_on_enter;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
