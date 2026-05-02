@@ -16,20 +16,6 @@
 /* ── utils ────────────────────────────────────────────────────────────────── */
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
-/* ── Device paths ─────────────────────────────────────────────────────────── */
-#define DEV_GPIO        "/dev/input/event0"
-#define DEV_TOUCHKEY    "/dev/input/event1"
-#define DEV_TTY              "/dev/tty1"
-#define BT_TOGGLE_SCRIPT     "/usr/local/bin/bluetooth-toggle"
-#define WIFI_TOGGLE_SCRIPT   "/usr/local/bin/wifi-toggle"
-#define BATTERY_STATUS_SCRIPT "/usr/local/bin/battery-status"
-#define FB_BLANK_PATH        "/sys/class/graphics/fb0/blank"
-#define TOUCH_INHIBIT_PATH   "/sys/class/input/event2/device/inhibited"
-#define BRIGHTNESS_PATH      "/sys/class/backlight/spi3.0/brightness"
-#define BRIGHTNESS_MIN  0
-#define BRIGHTNESS_MAX  24
-#define BRIGHTNESS_DEFAULT 12
-
 /* ── ANSI escape helpers ──────────────────────────────────────────────────── */
 /* Blanking : 0 disable, restore to 1 min
  *  Set value can be read at
@@ -49,6 +35,22 @@
 #define T_SHOW   "\033[?25h"
 
 #define BOX_W 50   /* printable width of the menu box interior */
+
+/* ── Device paths ─────────────────────────────────────────────────────────── */
+#define DEV_GPIO              "/dev/input/event0"
+#define DEV_TOUCHKEY          "/dev/input/event1"
+#define DEV_TTY               "/dev/tty1"
+#define BT_TOGGLE_SCRIPT      "/usr/local/bin/bluetooth-toggle"
+#define WIFI_TOGGLE_SCRIPT    "/usr/local/bin/wifi-toggle"
+#define BATTERY_STATUS_SCRIPT "/usr/local/bin/battery-status"
+#define BATT_LINES_MAX     10
+#define BATT_LINE_LEN      (BOX_W - 2)   /* max visible chars per line */
+#define FB_BLANK_PATH         "/sys/class/graphics/fb0/blank"
+#define TOUCH_INHIBIT_PATH    "/sys/class/input/event2/device/inhibited"
+#define BRIGHTNESS_PATH       "/sys/class/backlight/spi3.0/brightness"
+#define BRIGHTNESS_MIN     0
+#define BRIGHTNESS_MAX     24
+#define BRIGHTNESS_DEFAULT 12
 
 /* ── FSM states & events ─────────────────────────────────────────────────── */
 typedef enum {
@@ -88,11 +90,14 @@ extern bool        g_fbkbd_on;
 extern const Menu *g_menu;
 extern uint8_t     g_sel;
 extern int         g_brightness;
+extern char        g_batt_lines;
+extern int         g_batt_nlines;
 
+/* file descriptors are kept open */
 extern int   g_fd_gpio;
 extern int   g_fd_touchkey;
-extern int   g_fd_fb;            /* /sys/class/graphics/fb0/blank   — kept open */
-extern int   g_fd_touchinhibit;  /* /sys/class/input/.../inhibited  — kept open */
+extern int   g_fd_fb;
+extern int   g_fd_touchinhibit;
 extern FILE *g_tty;              /* DEV_TTY — all display output goes here */
 
 /* ── Menu tree — defined in menu.c ───────────────────────────────────────── */
@@ -117,6 +122,7 @@ int  open_button_dev   (const char *path);
 void release_button_dev(int fd);
 int  brightness_read   (void);
 void brightness_write  (int level);
+void battery_read      (void);
 int  run_cmd           (char *const argv[]);
 void fbkbd_set         (bool start);
 
