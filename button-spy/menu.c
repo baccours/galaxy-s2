@@ -1,8 +1,11 @@
 /*
- * menu.c — menu tree, leaf actions, and rendering
+ * menu.c — menu tree, leaf actions, on_enter hooks, and rendering
  *
- * To add a menu entry: add an action function and a row in the relevant
- * items[] array. No other file needs to change.
+ * To add a plain submenu:  add items[], a Menu with on_enter=NULL, link
+ *                          parent in main(), add a MenuItem pointing at it.
+ * To add an overlay menu:  add a Menu with count=0, items=NULL, an on_enter
+ *                          that sets g_state and calls render().  Add a
+ *                          MenuItem pointing at it.  No other file changes.
  */
 
 #include "button-spy.h"
@@ -13,71 +16,29 @@
 #include <unistd.h>
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Battery status
+ * Networking — status cache + on_enter hook
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Captured output of battery-status script — updated each time we enter the
- * battery view.  Each element is one display line (no trailing newline). */
-#define BATT_LINES_MAX  10
-#define BATT_LINE_LEN   (BOX_W - 2)   /* max visible chars per line */
+static bool g_wifi_on = false;
+static bool g_bt_on   = false;
 
-static char g_batt_lines[BATT_LINES_MAX][BATT_LINE_LEN + 1];
-static int  g_batt_nlines = 0;
-
-static void battery_capture(void)
+/* Query live state; called once each time the Networking submenu is entered. */
+static void net_on_enter(void)
 {
-    g_batt_nlines = 0;
-
-    FILE *fp = popen(BATTERY_STATUS_SCRIPT, "r");
-    if (!fp) { log_err("popen " BATTERY_STATUS_SCRIPT); return; }
-
-    char raw[256];
-    while (g_batt_nlines < BATT_LINES_MAX && fgets(raw, sizeof(raw), fp)) {
-        /* strip trailing newline */
-        size_t len = strlen(raw);
-        if (len > 0 && raw[len - 1] == '\n') raw[--len] = '\0';
-        /* truncate to box width */
-        if (len > (size_t)BATT_LINE_LEN) len = (size_t)BATT_LINE_LEN;
-        memcpy(g_batt_lines[g_batt_nlines], raw, len);
-        g_batt_lines[g_batt_nlines][len] = '\0';
-        g_batt_nlines++;
-    }
-
-    pclose(fp);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
- * Networking status cache
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-static bool g_wifi_on    = false;
-static bool g_bt_on      = false;
-static bool g_net_dirty  = true;   /* set true to force re-query on next render */
-
-static void net_query_status(void)
-{
-    if (!g_net_dirty) return;
     char *const wifi_chk[] = { WIFI_TOGGLE_SCRIPT, "status", NULL };
-    char *const bt_chk[] = { BT_TOGGLE_SCRIPT, "status", NULL };
-    g_wifi_on  = (run_cmd((char *const *)wifi_chk) == 0);
-    g_bt_on    = (run_cmd((char *const *)bt_chk)   == 0);
-    g_net_dirty = false;
+    char *const bt_chk[]   = { BT_TOGGLE_SCRIPT,   "status", NULL };
+    g_wifi_on = (run_cmd(wifi_chk) == 0);
+    g_bt_on   = (run_cmd(bt_chk)   == 0);
 }
 
-static const char *status_wifi(void) { net_query_status(); return g_wifi_on ? "ON" : "OFF"; }
-static const char *status_bt  (void) { net_query_status(); return g_bt_on   ? "ON" : "OFF"; }
-
-void net_invalidate(void) { g_net_dirty = true; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
- * Leaf action callbacks
- * ═══════════════════════════════════════════════════════════════════════════ */
+static const char *status_wifi(void) { return g_wifi_on ? "ON" : "OFF"; }
+static const char *status_bt  (void) { return g_bt_on   ? "ON" : "OFF"; }
 
 static void action_wifi_toggle(void)
 {
     char *const args[] = {
         (char *)WIFI_TOGGLE_SCRIPT,
-        (char *)g_wifi_on ? "off" : "on",
+        (char *)(g_wifi_on ? "off" : "on"),
         NULL
     };
     g_wifi_on = !g_wifi_on;
@@ -88,63 +49,121 @@ static void action_bt_toggle(void)
 {
     char *const args[] = {
         (char *)BT_TOGGLE_SCRIPT,
-        (char *)g_bt_on ? "off" : "on",
+        (char *)(g_bt_on ? "off" : "on"),
         NULL
     };
     g_bt_on = !g_bt_on;
     run_cmd(args);
 }
 
-static void action_reboot(void)
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Brightness — on_enter hook (item-less overlay menu)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+static void brightness_on_enter(void)
 {
-    char *const a[] = { "reboot", NULL };
-    run_cmd(a);
+    g_brightness = brightness_read();
+    g_state      = STATE_BRIGHTNESS;
+    render();
 }
 
-static void action_poweroff(void)
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Battery — on_enter hook (item-less overlay menu)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+#define BATT_LINES_MAX  10
+#define BATT_LINE_LEN   (BOX_W - 2)   /* max visible chars per line */
+
+static char g_batt_lines[BATT_LINES_MAX][BATT_LINE_LEN + 1];
+static int  g_batt_nlines = 0;
+
+static void battery_on_enter(void)
 {
-    char *const a[] = { "poweroff", NULL };
-    run_cmd(a);
+    g_batt_nlines = 0;
+
+    FILE *fp = popen(BATTERY_STATUS_SCRIPT, "r");
+    if (!fp) {
+        log_err("popen " BATTERY_STATUS_SCRIPT);
+    } else {
+        char raw[256];
+        while (g_batt_nlines < BATT_LINES_MAX && fgets(raw, sizeof(raw), fp)) {
+            size_t len = strlen(raw);
+            if (len > 0 && raw[len - 1] == '\n') raw[--len] = '\0';
+            if (len > (size_t)BATT_LINE_LEN) len = (size_t)BATT_LINE_LEN;
+            memcpy(g_batt_lines[g_batt_nlines], raw, len);
+            g_batt_lines[g_batt_nlines][len] = '\0';
+            g_batt_nlines++;
+        }
+        pclose(fp);
+    }
+
+    g_state = STATE_BATTERY;
+    render();
 }
 
-static void action_brightness(void) { th_brightness_enter(); }
-static void action_exit_menu(void)  { th_close_menu(); }
-static void action_battery(void)    { th_battery_enter(); }
+/* ═══════════════════════════════════════════════════════════════════════════
+ * Power — leaf actions
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+static void action_reboot  (void) { char *const a[] = { "reboot",   NULL }; run_cmd(a); }
+static void action_poweroff(void) { char *const a[] = { "poweroff", NULL }; run_cmd(a); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Menu tree
  *
- * Edit only these tables to add/remove/reorder entries.
- * Parent pointers are set at runtime in main() — C static initialisers
- * cannot forward-reference an object defined later in the same TU.
+ * Parent pointers and on_enter hooks are wired in main() — C static
+ * initialisers cannot forward-reference objects in the same translation unit.
+ *
+ * Item-less overlay menus (Brightness, Battery):
+ *   .items = NULL  .count = 0  .on_enter = <hook>
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static MenuItem g_net_items[] = {
     { "Toggle WiFi",      action_wifi_toggle, NULL, status_wifi },
     { "Toggle Bluetooth", action_bt_toggle,   NULL, status_bt   },
 };
-Menu g_net_menu = { "Networking", g_net_items, ARRAY_SIZE(g_net_items), NULL };
+Menu g_net_menu = { "Networking", g_net_items, ARRAY_SIZE(g_net_items), NULL, NULL };
 
 static MenuItem g_pwr_items[] = {
     { "Reboot",    action_reboot,   NULL, NULL },
     { "Power Off", action_poweroff, NULL, NULL },
 };
-Menu g_pwr_menu = { "Power", g_pwr_items, ARRAY_SIZE(g_pwr_items), NULL };
+Menu g_pwr_menu = { "Power", g_pwr_items, ARRAY_SIZE(g_pwr_items), NULL, NULL };
+
+/* Item-less overlay menus — on_enter linked in main() */
+Menu g_brightness_menu = { "Brightness",     NULL, 0, NULL, NULL };
+Menu g_battery_menu    = { "Battery Status", NULL, 0, NULL, NULL };
 
 static MenuItem g_root_items[] = {
-    { "Networking",     NULL,              &g_net_menu, NULL },
-    { "Power",          NULL,              &g_pwr_menu, NULL },
-    { "Brightness",     action_brightness, NULL,        NULL },
-    { "Battery Status", action_battery,    NULL,        NULL },
-    { "Exit Menu",      action_exit_menu,  NULL,        NULL },
+    { "Networking",     NULL,          &g_net_menu,       NULL },
+    { "Power",          NULL,          &g_pwr_menu,       NULL },
+    { "Brightness",     NULL,          &g_brightness_menu, NULL },
+    { "Battery Status", NULL,          &g_battery_menu,   NULL },
+    { "Exit Menu",      th_close_menu, NULL,              NULL },
 };
-const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_items), NULL };
+const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_items), NULL, NULL };
+
+/* ── Runtime wiring — called from main() ─────────────────────────────────── */
+
+void menu_init(void)
+{
+    g_net_menu.parent        = &g_root_menu;
+    g_net_menu.on_enter      = net_on_enter;
+
+    g_pwr_menu.parent        = &g_root_menu;
+
+    g_brightness_menu.parent   = &g_root_menu;
+    g_brightness_menu.on_enter = brightness_on_enter;
+
+    g_battery_menu.parent    = &g_root_menu;
+    g_battery_menu.on_enter  = battery_on_enter;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Rendering — single entry point
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Box-drawing helper ───────────────────────────────────────────────────── */
+/* ── Box-drawing helpers ──────────────────────────────────────────────────── */
 
 static void draw_hline(void)
 {
@@ -153,30 +172,27 @@ static void draw_hline(void)
     fputs("+\r\n", g_tty);
 }
 
-/* Print text left-aligned inside a box row; pads to fill BOX_W - 2.
- * Returns the number of visible characters written (excluding ANSI codes). */
-static int box_title_row(const char *pre_esc, const char *text, const char *post_esc)
+/* Print text left-aligned inside a box row; pads to fill BOX_W - 2. */
+static void box_title_row(const char *pre_esc, const char *text)
 {
     fputs("| ", g_tty);
-    if (pre_esc)  fputs(pre_esc,  g_tty);
-    int vis = fputs(text, g_tty) >= 0 ? (int)strlen(text) : 0;
-    if (post_esc) fputs(post_esc, g_tty);
+    if (pre_esc) fputs(pre_esc, g_tty);
+    int vis = (int)strlen(text);
+    fputs(text, g_tty);
     for (int i = vis; i < BOX_W - 2; i++) fputc(' ', g_tty);
     fputs(T_CYAN " |\r\n", g_tty);
-    return vis;
 }
+
+/* ── STATE_MENU ───────────────────────────────────────────────────────────── */
 
 static void render_menu(void)
 {
-    /* Breadcrumb: walk from current node to root via parent pointers,
-     * collect the path, then print root-first. */
+    /* Breadcrumb: walk from current node to root, collect, print root-first. */
     const Menu *path[16];
     int depth = 0;
     for (const Menu *m = g_menu; m && depth < 16; m = m->parent)
         path[depth++] = m;
 
-    /* Build the breadcrumb string so we can measure its visible length
-     * precisely — ANSI escapes must not be counted. */
     char crumb[128] = "";
     int  vis        = 0;
     for (int i = depth - 1; i >= 0; i--) {
@@ -189,7 +205,6 @@ static void render_menu(void)
     fputs(T_BOLD T_CYAN, g_tty);
     draw_hline();
 
-    /* Breadcrumb row */
     fputs("| " T_YELLOW, g_tty);
     fputs(crumb, g_tty);
     for (int i = vis; i < BOX_W - 2; i++) fputc(' ', g_tty);
@@ -197,16 +212,14 @@ static void render_menu(void)
 
     draw_hline();
 
-    /* Items */
     for (uint8_t i = 0; i < g_menu->count; i++) {
         bool        sel     = (i == g_sel);
         bool        has_sub = (g_menu->items[i].submenu != NULL);
         const char *badge   = g_menu->items[i].status
                               ? g_menu->items[i].status() : NULL;
         const char *arrow   = has_sub ? ">" : " ";
-        char        badge_buf[8] = "  ";   /* two spaces when no badge */
-        if (badge)
-            snprintf(badge_buf, sizeof(badge_buf), "%-3s", badge);
+        char        badge_buf[8] = "  ";
+        if (badge) snprintf(badge_buf, sizeof(badge_buf), "%-3s", badge);
 
         if (sel)
             fprintf(g_tty, "| " T_REV T_BOLD "%-*s%s%s" T_RESET T_CYAN " |\r\n",
@@ -220,18 +233,47 @@ static void render_menu(void)
     fputs(T_DIM "VOL+/-: navigate   PWR: select   BACK: back\r\n" T_RESET, g_tty);
 }
 
+/* ── STATE_BRIGHTNESS ─────────────────────────────────────────────────────── */
+
+static void render_brightness(void)
+{
+    fputs(T_BOLD T_CYAN, g_tty);
+    draw_hline();
+    box_title_row(T_YELLOW, "Brightness");
+    draw_hline();
+
+    char level_buf[16];
+    int level_vis = snprintf(level_buf, sizeof(level_buf),
+                             " %2d / %-2d ", g_brightness, BRIGHTNESS_MAX);
+    fprintf(g_tty, "| " T_RESET "%s" T_CYAN, level_buf);
+
+    int bar_vis = BRIGHTNESS_MAX + 1 + 2;
+    fputs(T_BOLD "[", g_tty);
+    for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
+        if (i == g_brightness) fputs(T_DIM, g_tty);
+        fputc(i < g_brightness ? '#' : '-', g_tty);
+    }
+    fputs(T_RESET T_CYAN "]", g_tty);
+
+    int pad = BOX_W - 2 - level_vis - bar_vis;
+    for (int i = 0; i < pad; i++) fputc(' ', g_tty);
+    fputs(" |\r\n", g_tty);
+
+    draw_hline();
+    fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, g_tty);
+}
+
+/* ── STATE_BATTERY ────────────────────────────────────────────────────────── */
+
 static void render_battery(void)
 {
     fputs(T_BOLD T_CYAN, g_tty);
     draw_hline();
-
-    box_title_row(T_YELLOW, "Battery Status", NULL);
-
+    box_title_row(T_YELLOW, "Battery Status");
     draw_hline();
 
     if (g_batt_nlines == 0) {
-        /* Script failed or produced no output */
-        char *msg = "  (no data)";
+        const char *msg = "  (no data)";
         fputs("| " T_RESET, g_tty);
         fputs(msg, g_tty);
         int pad = BOX_W - 2 - (int)strlen(msg);
@@ -251,47 +293,8 @@ static void render_battery(void)
     fputs(T_DIM "PWR/BACK: back to menu\r\n" T_RESET, g_tty);
 }
 
-void th_battery_enter(void)
-{
-    battery_capture();
-    g_state = STATE_BATTERY;
-    render();
-}
+/* ── Unified render ───────────────────────────────────────────────────────── */
 
-static void render_brightness(void)
-{
-    fputs(T_BOLD T_CYAN, g_tty);
-    draw_hline();
-
-    box_title_row(T_YELLOW, "Brightness", NULL);
-
-    draw_hline();
-
-    /* Level fraction — measure visible chars written */
-    char level_buf[16];
-    int level_vis = snprintf(level_buf, sizeof(level_buf),
-                             " %2d / %-2d ", g_brightness, BRIGHTNESS_MAX);
-    fprintf(g_tty, "| " T_RESET "%s" T_CYAN, level_buf);
-
-    /* Bar: filled in bold, empty in dim */
-    int bar_vis = BRIGHTNESS_MAX + 1 + 2; /* chars inside [] plus the brackets */
-    fputs(T_BOLD "[", g_tty);
-    for (int i = 0; i <= BRIGHTNESS_MAX; i++) {
-        if (i == g_brightness) fputs(T_DIM, g_tty);
-        fputc(i < g_brightness ? '#' : '-', g_tty);
-    }
-    fputs(T_RESET T_CYAN "]", g_tty);
-
-    /* Pad: BOX_W - 2 borders - "| " prefix - level - bar */
-    int pad = BOX_W - 2 - level_vis - bar_vis;
-    for (int i = 0; i < pad; i++) fputc(' ', g_tty);
-    fputs(" |\r\n", g_tty);
-
-    draw_hline();
-    fputs(T_DIM "VOL+/-: adjust   PWR/BACK: done\r\n" T_RESET, g_tty);
-}
-
-/* Unified render — always clears, then delegates on g_state */
 void render(void)
 {
     fputs(T_CLEAR, g_tty);

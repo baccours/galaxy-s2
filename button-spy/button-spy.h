@@ -63,6 +63,7 @@ typedef enum {
 typedef struct Menu Menu;
 typedef void        (*ActionFn)(void);
 typedef const char *(*StatusFn)(void);   /* returns "ON"/"OFF"/NULL at render time */
+typedef void        (*MenuFn)(void);     /* called once when a submenu is entered  */
 
 typedef struct {
     const char *label;
@@ -73,9 +74,10 @@ typedef struct {
 
 struct Menu {
     const char *title;
-    MenuItem   *items;
-    uint8_t     count;
-    const Menu *parent;   /* NULL at root; linked at runtime for submenus */
+    MenuItem   *items;    /* NULL for item-less overlay menus      */
+    uint8_t     count;    /* 0 for item-less overlay menus         */
+    const Menu *parent;   /* NULL at root; linked at runtime       */
+    MenuFn      on_enter; /* called on entry; NULL = plain submenu */
 };
 
 /* ── Global state — defined in system.c ──────────────────────────────────── */
@@ -97,6 +99,8 @@ extern FILE *g_tty;         /* DEV_TTY — all display output goes here */
 extern const Menu g_root_menu;
 extern Menu       g_net_menu;
 extern Menu       g_pwr_menu;
+extern Menu       g_brightness_menu;
+extern Menu       g_battery_menu;
 
 /* ── system.c API ────────────────────────────────────────────────────────── */
 void log_info(const char *fmt, ...);
@@ -118,12 +122,9 @@ void fbkbd_set         (bool start);
 
 /* ── menu.c API ──────────────────────────────────────────────────────────── */
 void render(void);
-void net_invalidate(void);  /* mark network status cache stale */
+void menu_init(void);   /* wire parent pointers and on_enter hooks — call once in main() */
 
-/* Declared here so menu.c's action callbacks can trigger FSM transitions
- * without duplicating state-mutation logic. */
-void th_close_menu      (void);
-void th_brightness_enter(void);
-void th_battery_enter   (void);
+/* Declared here so button-spy.c FSM handlers can trigger state transitions. */
+void th_close_menu(void);
 
 #endif /* BTNSPY_H */

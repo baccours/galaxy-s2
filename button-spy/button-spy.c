@@ -37,11 +37,17 @@ static void th_menu_select(void)
     if (item->submenu) {
         g_menu = item->submenu;
         g_sel  = 0;
-        net_invalidate();
-        render();
+        /* Fire the hook (status refresh, overlay entry, …) if present.
+         * The hook is responsible for setting g_state and calling render()
+         * when it changes state.  For plain submenus (no hook) we render
+         * the new menu ourselves. */
+        if (g_menu->on_enter)
+            g_menu->on_enter();
+        else
+            render();
     } else if (item->action) {
         item->action();
-        if (g_state == STATE_MENU || g_state == STATE_BRIGHTNESS)
+        if (g_state == STATE_MENU)
             render();
     }
 }
@@ -60,9 +66,9 @@ void th_close_menu(void)
 static void th_menu_back(void)
 {
     if (g_menu->parent) {
-        g_menu = g_menu->parent;
-        g_sel  = 0;
-        net_invalidate();
+        g_menu  = g_menu->parent;
+        g_sel   = 0;
+        g_state = STATE_MENU;
         render();
     } else {
         th_close_menu();
@@ -93,13 +99,6 @@ static void th_home(void)
     fbkbd_set(!g_fbkbd_on);
 }
 
-void th_brightness_enter(void)
-{
-    g_brightness = brightness_read();
-    g_state = STATE_BRIGHTNESS;
-    render();
-}
-
 static void th_brightness_up(void)
 {
     brightness_write(g_brightness + 1);
@@ -109,18 +108,6 @@ static void th_brightness_up(void)
 static void th_brightness_down(void)
 {
     brightness_write(g_brightness - 1);
-    render();
-}
-
-static void th_brightness_exit(void)
-{
-    g_state = STATE_MENU;
-    render();
-}
-
-static void th_battery_exit(void)
-{
-    g_state = STATE_MENU;
     render();
 }
 
@@ -145,11 +132,11 @@ static const Transition TRANSITIONS[] = {
 
     { STATE_BRIGHTNESS, KEY_VOLUMEUP,   th_brightness_up   },
     { STATE_BRIGHTNESS, KEY_VOLUMEDOWN, th_brightness_down },
-    { STATE_BRIGHTNESS, KEY_POWER,      th_brightness_exit },
-    { STATE_BRIGHTNESS, KEY_BACK,       th_brightness_exit },
+    { STATE_BRIGHTNESS, KEY_POWER,      th_menu_back       },
+    { STATE_BRIGHTNESS, KEY_BACK,       th_menu_back       },
 
-    { STATE_BATTERY,    KEY_POWER,      th_battery_exit    },
-    { STATE_BATTERY,    KEY_BACK,       th_battery_exit    },
+    { STATE_BATTERY,    KEY_POWER,      th_menu_back       },
+    { STATE_BATTERY,    KEY_BACK,       th_menu_back       },
 
     { STATE_IDLE,       KEY_POWER,      th_idle_power      },
 
@@ -220,8 +207,8 @@ int main(void)
     sigaction(SIGHUP,  &sa, NULL);
     sigaction(SIGCHLD, &(struct sigaction){ .sa_handler = SIG_DFL }, NULL);
 
-    g_net_menu.parent = &g_root_menu;
-    g_pwr_menu.parent = &g_root_menu;
+    /* Wire parent pointers and on_enter hooks for all menus */
+    menu_init();
 
     g_fd_fb      = open(FB_BLANK_PATH,      O_WRONLY | O_CLOEXEC);
     g_fd_inhibit = open(TOUCH_INHIBIT_PATH, O_WRONLY | O_CLOEXEC);
