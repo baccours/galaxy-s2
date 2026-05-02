@@ -57,7 +57,7 @@ static void action_bt_toggle(void)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Brightness — on_enter hook (item-less overlay menu)
+ * Brightness — item-less overlay menu
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static void brightness_on_enter(void)
@@ -67,7 +67,7 @@ static void brightness_on_enter(void)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Battery — on_enter hook (item-less overlay menu)
+ * Battery — item-less overlay menu
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 #define BATT_LINES_MAX  10
@@ -108,9 +108,6 @@ static void action_poweroff(void) { char *const a[] = { "poweroff", NULL }; run_
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Menu tree
- *
- * Parent pointers are wired in main() — C static
- * 
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static MenuItem g_net_items[] = {
