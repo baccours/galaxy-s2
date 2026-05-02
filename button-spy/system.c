@@ -21,13 +21,15 @@
 #include <unistd.h>
 
 /* ── Global state definitions ────────────────────────────────────────────── */
-volatile sig_atomic_t g_running      = 1;
-AppState              g_state        = STATE_IDLE;
-bool                  g_screen_blank = false;
-bool                  g_fbkbd_on     = false;
-const Menu           *g_menu         = NULL;
-uint8_t               g_sel          = 0;
-int                   g_brightness   = BRIGHTNESS_DEFAULT;
+volatile sig_atomic_t g_running = 1;
+AppState         g_state        = STATE_IDLE;
+bool             g_screen_blank = false;
+bool             g_fbkbd_on     = false;
+const Menu      *g_menu         = NULL;
+uint8_t          g_sel          = 0;
+int              g_brightness   = BRIGHTNESS_DEFAULT;
+char             g_batt_lines[BATT_LINES_MAX][BATT_LINE_LEN + 1];
+int              g_batt_nlines = 0;
 
 int   g_fd_gpio          = -1;
 int   g_fd_touchkey      = -1;
@@ -202,4 +204,25 @@ void brightness_write(int level)
     if (!f) { log_err("open " BRIGHTNESS_PATH); return; }
     fprintf(f, "%d\n", level);
     fclose(f);
+}
+
+/* ── Battery ─────────────────────────────────────────────────────────────── */
+void battery_read(void)
+{
+    g_batt_nlines = 0;
+
+    FILE *fp = popen(BATTERY_STATUS_SCRIPT, "r");
+    if (!fp) { log_err("popen " BATTERY_STATUS_SCRIPT); return; }
+    
+    char raw[256];
+    while (g_batt_nlines < BATT_LINES_MAX && fgets(raw, sizeof(raw), fp)) {
+        size_t len = strlen(raw);
+        if (len > 0 && raw[len - 1] == '\n') raw[--len] = '\0';
+        if (len > (size_t)BATT_LINE_LEN) len = (size_t)BATT_LINE_LEN;
+        memcpy(g_batt_lines[g_batt_nlines], raw, len);
+        g_batt_lines[g_batt_nlines][len] = '\0';
+        g_batt_nlines++;
+    }
+
+    pclose(fp);
 }
