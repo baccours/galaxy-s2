@@ -70,32 +70,9 @@ static void brightness_on_enter(void)
  * Battery — item-less overlay menu
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-#define BATT_LINES_MAX  10
-#define BATT_LINE_LEN   (BOX_W - 2)   /* max visible chars per line */
-
-static char g_batt_lines[BATT_LINES_MAX][BATT_LINE_LEN + 1];
-static int  g_batt_nlines = 0;
-
 static void battery_on_enter(void)
 {
-    g_batt_nlines = 0;
-
-    FILE *fp = popen(BATTERY_STATUS_SCRIPT, "r");
-    if (!fp) {
-        log_err("popen " BATTERY_STATUS_SCRIPT);
-    } else {
-        char raw[256];
-        while (g_batt_nlines < BATT_LINES_MAX && fgets(raw, sizeof(raw), fp)) {
-            size_t len = strlen(raw);
-            if (len > 0 && raw[len - 1] == '\n') raw[--len] = '\0';
-            if (len > (size_t)BATT_LINE_LEN) len = (size_t)BATT_LINE_LEN;
-            memcpy(g_batt_lines[g_batt_nlines], raw, len);
-            g_batt_lines[g_batt_nlines][len] = '\0';
-            g_batt_nlines++;
-        }
-        pclose(fp);
-    }
-
+    battery_read();
     g_state = STATE_BATTERY;
 }
 
