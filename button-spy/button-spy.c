@@ -37,14 +37,9 @@ static void th_menu_select(void)
     if (item->submenu) {
         g_menu = item->submenu;
         g_sel  = 0;
-        /* Fire the hook (status refresh, overlay entry, …) if present.
-         * The hook is responsible for setting g_state and calling render()
-         * when it changes state.  For plain submenus (no hook) we render
-         * the new menu ourselves. */
         if (g_menu->on_enter)
             g_menu->on_enter();
-        else
-            render();
+        render();
     } else if (item->action) {
         item->action();
         if (g_state == STATE_MENU)
@@ -95,7 +90,7 @@ static void th_idle_power(void)
 
 static void th_home(void)
 {
-    if (g_state == STATE_MENU || g_screen_blank) return;
+    if (g_screen_blank) return;
     fbkbd_set(!g_fbkbd_on);
 }
 
@@ -187,9 +182,9 @@ static void cleanup(void)
         close(g_fd_fb);
     }
 
-    if (g_fd_inhibit >= 0) {
+    if (g_fd_touchinhibit >= 0) {
         touch_inhibit(false);
-        close(g_fd_inhibit);
+        close(g_fd_touchinhibit);
     }
 
     log_info("done");
@@ -207,15 +202,16 @@ int main(void)
     sigaction(SIGHUP,  &sa, NULL);
     sigaction(SIGCHLD, &(struct sigaction){ .sa_handler = SIG_DFL }, NULL);
 
-    /* Wire parent pointers and on_enter hooks for all menus */
+    /* Wire parent pointers for all menus */
     menu_init();
 
-    g_fd_fb      = open(FB_BLANK_PATH,      O_WRONLY | O_CLOEXEC);
-    g_fd_inhibit = open(TOUCH_INHIBIT_PATH, O_WRONLY | O_CLOEXEC);
+    g_fd_fb           = open(FB_BLANK_PATH,      O_WRONLY | O_CLOEXEC);
+    g_fd_touchinhibit = open(TOUCH_INHIBIT_PATH, O_WRONLY | O_CLOEXEC);
     g_fd_gpio     = open_button_dev(DEV_GPIO);
     g_fd_touchkey = open_button_dev(DEV_TOUCHKEY);
 
-    if (g_fd_fb < 0 || g_fd_inhibit < 0 || g_fd_gpio < 0 || g_fd_touchkey < 0) {
+    if (g_fd_fb < 0 || g_fd_touchinhibit < 0 ||
+        g_fd_gpio < 0 || g_fd_touchkey < 0) {
         log_err("open required device");
         cleanup();
         return EXIT_FAILURE;
