@@ -13,6 +13,40 @@
 #include <unistd.h>
 
 /* ═══════════════════════════════════════════════════════════════════════════
+ * Battery status
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Captured output of battery-status script — updated each time we enter the
+ * battery view.  Each element is one display line (no trailing newline). */
+#define BATT_LINES_MAX  10
+#define BATT_LINE_LEN   (BOX_W - 2)   /* max visible chars per line */
+
+static char g_batt_lines[BATT_LINES_MAX][BATT_LINE_LEN + 1];
+static int  g_batt_nlines = 0;
+
+static void battery_capture(void)
+{
+    g_batt_nlines = 0;
+
+    FILE *fp = popen(BATTERY_STATUS_SCRIPT, "r");
+    if (!fp) { log_err("popen " BATTERY_STATUS_SCRIPT); return; }
+
+    char raw[256];
+    while (g_batt_nlines < BATT_LINES_MAX && fgets(raw, sizeof(raw), fp)) {
+        /* strip trailing newline */
+        size_t len = strlen(raw);
+        if (len > 0 && raw[len - 1] == '\n') raw[--len] = '\0';
+        /* truncate to box width */
+        if (len > (size_t)BATT_LINE_LEN) len = (size_t)BATT_LINE_LEN;
+        memcpy(g_batt_lines[g_batt_nlines], raw, len);
+        g_batt_lines[g_batt_nlines][len] = '\0';
+        g_batt_nlines++;
+    }
+
+    pclose(fp);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
  * Networking status cache
  * ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -75,6 +109,7 @@ static void action_poweroff(void)
 
 static void action_brightness(void) { th_brightness_enter(); }
 static void action_exit_menu(void)  { th_close_menu(); }
+static void action_battery(void)    { th_battery_enter(); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * Menu tree
@@ -97,10 +132,11 @@ static MenuItem g_pwr_items[] = {
 Menu g_pwr_menu = { "Power", g_pwr_items, ARRAY_SIZE(g_pwr_items), NULL };
 
 static MenuItem g_root_items[] = {
-    { "Networking",  NULL,              &g_net_menu, NULL },
-    { "Power",       NULL,              &g_pwr_menu, NULL },
-    { "Brightness",  action_brightness, NULL,        NULL },
-    { "Exit Menu",   action_exit_menu,  NULL,        NULL },
+    { "Networking",     NULL,              &g_net_menu, NULL },
+    { "Power",          NULL,              &g_pwr_menu, NULL },
+    { "Brightness",     action_brightness, NULL,        NULL },
+    { "Battery Status", action_battery,    NULL,        NULL },
+    { "Exit Menu",      action_exit_menu,  NULL,        NULL },
 };
 const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_items), NULL };
 
@@ -184,6 +220,44 @@ static void render_menu(void)
     fputs(T_DIM "VOL+/-: navigate   PWR: select   BACK: back\r\n" T_RESET, g_tty);
 }
 
+static void render_battery(void)
+{
+    fputs(T_BOLD T_CYAN, g_tty);
+    draw_hline();
+
+    box_title_row(T_YELLOW, "Battery Status", NULL);
+
+    draw_hline();
+
+    if (g_batt_nlines == 0) {
+        /* Script failed or produced no output */
+        char *msg = "  (no data)";
+        fputs("| " T_RESET, g_tty);
+        fputs(msg, g_tty);
+        int pad = BOX_W - 2 - (int)strlen(msg);
+        for (int i = 0; i < pad; i++) fputc(' ', g_tty);
+        fputs(T_CYAN " |\r\n", g_tty);
+    } else {
+        for (int i = 0; i < g_batt_nlines; i++) {
+            int vis = (int)strlen(g_batt_lines[i]);
+            fputs("| " T_RESET, g_tty);
+            fputs(g_batt_lines[i], g_tty);
+            for (int j = vis; j < BOX_W - 2; j++) fputc(' ', g_tty);
+            fputs(T_CYAN " |\r\n", g_tty);
+        }
+    }
+
+    draw_hline();
+    fputs(T_DIM "PWR/BACK: back to menu\r\n" T_RESET, g_tty);
+}
+
+void th_battery_enter(void)
+{
+    battery_capture();
+    g_state = STATE_BATTERY;
+    render();
+}
+
 static void render_brightness(void)
 {
     fputs(T_BOLD T_CYAN, g_tty);
@@ -224,6 +298,7 @@ void render(void)
     switch (g_state) {
         case STATE_MENU:       render_menu();       break;
         case STATE_BRIGHTNESS: render_brightness(); break;
+        case STATE_BATTERY:    render_battery();    break;
         default:                                    break;
     }
     fflush(g_tty);

@@ -22,6 +22,7 @@
 #define DEV_TTY              "/dev/tty1"
 #define BT_TOGGLE_SCRIPT     "/usr/local/bin/bluetooth-toggle"
 #define WIFI_TOGGLE_SCRIPT   "/usr/local/bin/wifi-toggle"
+#define BATTERY_STATUS_SCRIPT "/usr/local/bin/battery-status"
 #define FB_BLANK_PATH        "/sys/class/graphics/fb0/blank"
 #define TOUCH_INHIBIT_PATH   "/sys/class/input/event2/device/inhibited"
 #define BRIGHTNESS_PATH      "/sys/class/backlight/spi3.0/brightness"
@@ -54,6 +55,7 @@ typedef enum {
     STATE_IDLE,       /* screen on, no menu                    */
     STATE_MENU,       /* menu visible and navigable            */
     STATE_BRIGHTNESS, /* brightness adjustment overlay         */
+    STATE_BATTERY,    /* battery status display                */
     STATE_ANY,        /* wildcard — matches any state in table */
 } AppState;
 
@@ -122,5 +124,6 @@ void net_invalidate(void);  /* mark network status cache stale */
  * without duplicating state-mutation logic. */
 void th_close_menu      (void);
 void th_brightness_enter(void);
+void th_battery_enter   (void);
 
 #endif /* BTNSPY_H */

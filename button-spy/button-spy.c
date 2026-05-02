@@ -118,6 +118,12 @@ static void th_brightness_exit(void)
     render();
 }
 
+static void th_battery_exit(void)
+{
+    g_state = STATE_MENU;
+    render();
+}
+
 /* ── FSM declarative transition table ────────────────────────────────────────
  * { state, key_code, handler } — STATE_ANY matches any state.
  * First match wins: specific states must appear before STATE_ANY rows.
@@ -141,6 +147,9 @@ static const Transition TRANSITIONS[] = {
     { STATE_BRIGHTNESS, KEY_VOLUMEDOWN, th_brightness_down },
     { STATE_BRIGHTNESS, KEY_POWER,      th_brightness_exit },
     { STATE_BRIGHTNESS, KEY_BACK,       th_brightness_exit },
+
+    { STATE_BATTERY,    KEY_POWER,      th_battery_exit    },
+    { STATE_BATTERY,    KEY_BACK,       th_battery_exit    },
 
     { STATE_IDLE,       KEY_POWER,      th_idle_power      },
 
