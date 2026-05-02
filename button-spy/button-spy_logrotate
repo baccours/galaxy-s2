@@ -1,0 +1,7 @@
+/var/log/button-spy.log {
+    size 1M
+    rotate 5
+    copytruncate
+    compress
+    missingok
+}
