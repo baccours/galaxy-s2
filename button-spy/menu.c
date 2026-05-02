@@ -103,10 +103,10 @@ Menu g_brightness_menu = { "Brightness",     NULL, 0, NULL, brightness_on_enter 
 Menu g_battery_menu    = { "Battery Status", NULL, 0, NULL, battery_on_enter    };
 
 static MenuItem g_root_items[] = {
+    { "Battery Status", NULL,          &g_battery_menu,   NULL },
+    { "Brightness",     NULL,          &g_brightness_menu, NULL },
     { "Networking",     NULL,          &g_net_menu,       NULL },
     { "Power",          NULL,          &g_pwr_menu,       NULL },
-    { "Brightness",     NULL,          &g_brightness_menu, NULL },
-    { "Battery Status", NULL,          &g_battery_menu,   NULL },
     { "Exit Menu",      th_close_menu, NULL,              NULL },
 };
 const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_items), NULL, NULL };
