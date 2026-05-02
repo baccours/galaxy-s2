@@ -19,6 +19,7 @@ install: $(TARGET)
 	strip --strip-all /usr/local/bin/$(TARGET)
 	install -Dm644 button-spy_openrc /etc/init.d/button-spy
 	rc-update add button-spy default
+ install -Dm644 button-spy_logrotate /etc/logrotate.d/button-spy
 
 clean:
 	rm -f $(TARGET) $(OBJS)
