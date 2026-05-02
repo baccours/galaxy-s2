@@ -64,7 +64,6 @@ static void brightness_on_enter(void)
 {
     g_brightness = brightness_read();
     g_state      = STATE_BRIGHTNESS;
-    render();
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -98,7 +97,6 @@ static void battery_on_enter(void)
     }
 
     g_state = STATE_BATTERY;
-    render();
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -111,11 +109,8 @@ static void action_poweroff(void) { char *const a[] = { "poweroff", NULL }; run_
 /* ═══════════════════════════════════════════════════════════════════════════
  * Menu tree
  *
- * Parent pointers and on_enter hooks are wired in main() — C static
- * initialisers cannot forward-reference objects in the same translation unit.
- *
- * Item-less overlay menus (Brightness, Battery):
- *   .items = NULL  .count = 0  .on_enter = <hook>
+ * Parent pointers are wired in main() — C static
+ * 
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static MenuItem g_net_items[] = {
@@ -130,7 +125,6 @@ static MenuItem g_pwr_items[] = {
 };
 Menu g_pwr_menu = { "Power", g_pwr_items, ARRAY_SIZE(g_pwr_items), NULL, NULL };
 
-/* Item-less overlay menus — on_enter linked in main() */
 Menu g_brightness_menu = { "Brightness",     NULL, 0, NULL, brightness_on_enter };
 Menu g_battery_menu    = { "Battery Status", NULL, 0, NULL, battery_on_enter    };
 
@@ -143,7 +137,9 @@ static MenuItem g_root_items[] = {
 };
 const Menu g_root_menu = { "pmOS  GT-I9100", g_root_items, ARRAY_SIZE(g_root_items), NULL, NULL };
 
-/* ── Runtime wiring — called from main() ─────────────────────────────────── */
+/* ── Runtime wiring — called from main() ──────────────────────────────────
+ * initialisers cannot forward-reference objects in the same translation unit.
+ */
 
 void menu_init(void)
 {
