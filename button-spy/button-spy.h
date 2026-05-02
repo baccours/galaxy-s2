@@ -90,7 +90,7 @@ extern bool        g_fbkbd_on;
 extern const Menu *g_menu;
 extern uint8_t     g_sel;
 extern int         g_brightness;
-extern char        g_batt_lines;
+extern char        g_batt_lines[BATT_LINES_MAX][BATT_LINE_LEN + 1];
 extern int         g_batt_nlines;
 
 /* file descriptors are kept open */
