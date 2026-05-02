@@ -20,9 +20,8 @@ if [ "$1" = "-p" ]; then
 fi
 
 # Default "verbose" output mode
-echo "--- Galaxy S2 Battery Status ---"
-echo "Current Time: $(date +%H:%M:%S)"
+echo "Time: $(date +%H:%M:%S)"
 echo "Reported: $(cat $BATT_DIR/capacity)%"
 echo "Physical: $P% ($VOLT mV)"
 echo "Volt now: $(( $(cat $BATT_DIR/voltage_now) / 1000 )) mV"
-echo "Status: $(cat $CHG_DIR/status)"
+echo "Status:   $(cat $CHG_DIR/status)"
