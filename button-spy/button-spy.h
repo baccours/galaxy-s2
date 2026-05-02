@@ -91,9 +91,9 @@ extern int         g_brightness;
 
 extern int   g_fd_gpio;
 extern int   g_fd_touchkey;
-extern int   g_fd_fb;           /* /sys/class/graphics/fb0/blank   — kept open */
-extern int   g_fd_touchscreen;  /* /sys/class/input/.../inhibited  — kept open */
-extern FILE *g_tty;         /* DEV_TTY — all display output goes here */
+extern int   g_fd_fb;            /* /sys/class/graphics/fb0/blank   — kept open */
+extern int   g_fd_touchinhibit;  /* /sys/class/input/.../inhibited  — kept open */
+extern FILE *g_tty;              /* DEV_TTY — all display output goes here */
 
 /* ── Menu tree — defined in menu.c ───────────────────────────────────────── */
 extern const Menu g_root_menu;
