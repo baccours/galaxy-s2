@@ -91,8 +91,8 @@ extern int         g_brightness;
 
 extern int   g_fd_gpio;
 extern int   g_fd_touchkey;
-extern int   g_fd_fb;       /* /sys/class/graphics/fb0/blank   — kept open */
-extern int   g_fd_inhibit;  /* /sys/class/input/.../inhibited  — kept open */
+extern int   g_fd_fb;           /* /sys/class/graphics/fb0/blank   — kept open */
+extern int   g_fd_touchscreen;  /* /sys/class/input/.../inhibited  — kept open */
 extern FILE *g_tty;         /* DEV_TTY — all display output goes here */
 
 /* ── Menu tree — defined in menu.c ───────────────────────────────────────── */
@@ -122,7 +122,7 @@ void fbkbd_set         (bool start);
 
 /* ── menu.c API ──────────────────────────────────────────────────────────── */
 void render(void);
-void menu_init(void);   /* wire parent pointers and on_enter hooks — call once in main() */
+void menu_init(void);
 
 /* Declared here so button-spy.c FSM handlers can trigger state transitions. */
 void th_close_menu(void);
